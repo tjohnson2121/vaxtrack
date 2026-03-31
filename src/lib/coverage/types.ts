@@ -37,4 +37,7 @@ export interface CoverageResult {
   supportingSourceUrls?: string[];
   dispensingContext?: string;
   missingInformation?: string[];
+  declineReason?: string;
+  naciNote?: string;
+  coverageGap?: string;
 }

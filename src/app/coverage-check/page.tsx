@@ -10,6 +10,9 @@ export default function CoverageCheckPage() {
           Ontario, Quebec, and Nova Scotia. Decision support only — verify
           against current provincial guidance before billing.
         </p>
+        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+          Last updated: March 31, 2026
+        </p>
       </header>
       <CoverageCheckForm />
     </main>

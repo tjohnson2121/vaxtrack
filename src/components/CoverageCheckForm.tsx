@@ -38,12 +38,37 @@ const CONDITIONS: { id: ConditionId; label: string }[] = [
     id: "transplant",
     label: "Solid organ or hematopoietic stem cell transplant recipient",
   },
-  { id: "homeless", label: "Experiencing homelessness" },
+  { id: "homeless", label: "Is homeless" },
   {
     id: "indigenous",
     label: "First Nations, Inuit, or Métis (ON 60–74 pathway)",
   },
 ];
+
+// Province + product combinations that have relevant eligibility conditions
+const PROVINCE_CONDITIONS: Record<Jurisdiction, Partial<Record<RsvProduct, ConditionId[]>>> = {
+  ON: {
+    Beyfortus: ["chronic_lung_prematurity"],
+    Arexvy: ["lct_retirement_resident", "alc_hospital", "gn_immunocompromised", "dialysis", "transplant", "homeless", "indigenous"],
+    Abrysvo: ["lct_retirement_resident", "alc_hospital", "gn_immunocompromised", "dialysis", "transplant", "homeless", "indigenous"],
+  },
+  QC: {
+    Beyfortus: [],
+    Arexvy: ["transplant", "dialysis"],
+    Abrysvo: ["transplant", "dialysis"],
+  },
+  NS: {
+    Beyfortus: [],
+    Arexvy: ["lct_retirement_resident", "alc_hospital"],
+    Abrysvo: ["lct_retirement_resident", "alc_hospital"],
+  },
+};
+
+const PRODUCT_MONOGRAPH: Record<RsvProduct, string> = {
+  Arexvy: "Health Canada approved indication: Adults 60 years of age and older (single dose).",
+  Abrysvo: "Health Canada approved indication: Adults 60 years of age and older; and pregnant individuals at 24–36 weeks gestation to protect infants in the first 6 months of life.",
+  Beyfortus: "Health Canada approved indication: Neonates and infants for protection during their first RSV season; children up to 24 months at increased risk of severe RSV disease in a second season.",
+};
 
 type VaccineOption = { id: string; name: string };
 
@@ -65,9 +90,24 @@ export function CoverageCheckForm() {
     "" | ConditionId
   >("");
 
+  const [result, setResult] = useState<CoverageResult | null>(null);
+  const [resultSource, setResultSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [showNaci, setShowNaci] = useState(false);
+
   const conditionIds: ConditionId[] = eligibilityFactor
     ? [eligibilityFactor]
     : [];
+
+  const availableConditionIds = PROVINCE_CONDITIONS[jurisdiction]?.[product] ?? [];
+  const filteredConditions = CONDITIONS.filter((c) => (availableConditionIds as string[]).includes(c.id));
+
+  useEffect(() => {
+    if (eligibilityFactor && !(availableConditionIds as string[]).includes(eligibilityFactor)) {
+      setEligibilityFactor("");
+    }
+  }, [jurisdiction, product]);
 
   const parsed = useMemo(() => {
     const y = parseInt(ageYears, 10);
@@ -84,10 +124,23 @@ export function CoverageCheckForm() {
     };
   }, [ageYears, ageMonths, gestationalWeeks]);
 
-  const [result, setResult] = useState<CoverageResult | null>(null);
-  const [resultSource, setResultSource] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
+  const resetForm = () => {
+    setVaccineId("");
+    setJurisdiction("ON");
+    setProduct("Arexvy");
+    setAgeYears("72");
+    setAgeMonths("");
+    setPregnant(false);
+    setGestationalWeeks("");
+    setDeliverRsv(false);
+    setPrevPublic(false);
+    setPedDiscussed(false);
+    setEligibilityFactor("");
+    setResult(null);
+    setResultSource(null);
+    setError(null);
+    setShowNaci(false);
+  };
 
   const loadVaccinesWithPublishedRules = useCallback(async () => {
     try {
@@ -238,7 +291,7 @@ export function CoverageCheckForm() {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">
-            Product
+            Vaccine
             <select
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
               value={product}
@@ -253,7 +306,7 @@ export function CoverageCheckForm() {
           </label>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={`grid gap-4 ${product === "Beyfortus" ? "sm:grid-cols-2" : ""}`}>
           <label className="flex flex-col gap-1 text-sm font-medium">
             Age (years)
             <input
@@ -264,18 +317,20 @@ export function CoverageCheckForm() {
               onChange={(e) => setAgeYears(e.target.value)}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            Age (months) — required for Beyfortus
-            <input
-              type="number"
-              min={0}
-              max={36}
-              placeholder="e.g. 6"
-              className="rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-              value={ageMonths}
-              onChange={(e) => setAgeMonths(e.target.value)}
-            />
-          </label>
+          {product === "Beyfortus" && (
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Age (months) — required for Beyfortus
+              <input
+                type="number"
+                min={0}
+                max={36}
+                placeholder="e.g. 6"
+                className="rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                value={ageMonths}
+                onChange={(e) => setAgeMonths(e.target.value)}
+              />
+            </label>
+          )}
         </div>
 
         {product === "Abrysvo" && (
@@ -316,17 +371,20 @@ export function CoverageCheckForm() {
           </div>
         )}
 
-        {(product === "Arexvy" ||
-          (product === "Abrysvo" && !pregnant)) && (
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={prevPublic}
-              onChange={(e) => setPrevPublic(e.target.checked)}
-            />
-            Previously received publicly funded adult RSV vaccine (Ontario
-            adult program)
-          </label>
+        {jurisdiction === "ON" && (product === "Arexvy" || (product === "Abrysvo" && !pregnant)) && (
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={prevPublic}
+                onChange={(e) => setPrevPublic(e.target.checked)}
+              />
+              Patient has already received a publicly funded adult RSV vaccine
+            </label>
+            <p className="ml-6 text-xs text-zinc-500">
+              Ontario's adult RSV program funds a single dose; a prior publicly funded dose makes the patient ineligible for repeat public funding.
+            </p>
+          </div>
         )}
 
         {product === "Beyfortus" && (
@@ -341,24 +399,29 @@ export function CoverageCheckForm() {
           </label>
         )}
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          Program eligibility factor (optional)
-          <select
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-900"
-            value={eligibilityFactor}
-            onChange={(e) => {
-              const v = e.target.value;
-              setEligibilityFactor(v === "" ? "" : (v as ConditionId));
-            }}
-          >
-            <option value="">None / not applicable</option>
-            {CONDITIONS.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {filteredConditions.length > 0 && (
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            Program eligibility criterion (optional)
+            <select
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-normal dark:border-zinc-700 dark:bg-zinc-900"
+              value={eligibilityFactor}
+              onChange={(e) => {
+                const v = e.target.value;
+                setEligibilityFactor(v === "" ? "" : (v as ConditionId));
+              }}
+            >
+              <option value="">None / not applicable</option>
+              {filteredConditions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs font-normal text-zinc-500">
+              Showing criteria relevant to {JURISDICTIONS.find(j => j.id === jurisdiction)?.label ?? jurisdiction} for this vaccine.
+            </span>
+          </label>
+        )}
 
         <button
           type="submit"
@@ -389,8 +452,18 @@ export function CoverageCheckForm() {
             <p className="text-2xl font-bold capitalize">
               {result.outcome.replace("_", " ")}
             </p>
+            {result.outcome === "not_covered" && result.declineReason && (
+              <p className="mt-1 text-sm font-medium opacity-90">
+                Reason: {result.declineReason}
+              </p>
+            )}
             <p className="mt-1 text-sm font-medium capitalize">
-              Confidence: {result.confidence}
+              NACI recommendation:{" "}
+              {result.confidence === "high"
+                ? "Strong (Grade A)"
+                : result.confidence === "medium"
+                ? "Discretionary (Grade B)"
+                : "Conditional / Insufficient evidence"}
             </p>
           </div>
           <ul className="list-inside list-disc space-y-1 text-sm">
@@ -441,12 +514,52 @@ export function CoverageCheckForm() {
                 </ul>
               </div>
             )}
+          {(result.naciNote || result.coverageGap) && (
+            <div className="border-t border-black/10 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowNaci((v) => !v)}
+                className="text-xs font-semibold uppercase tracking-wide opacity-80 hover:opacity-100 underline"
+              >
+                {showNaci ? "Hide NACI guidance" : "Show NACI guidance"}
+              </button>
+              {showNaci && (
+                <div className="mt-3 space-y-3">
+                  {result.naciNote && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase opacity-70">NACI guidance</p>
+                      <p className="mt-1 text-sm">{result.naciNote}</p>
+                    </div>
+                  )}
+                  {result.coverageGap && (
+                    <div className="rounded-md border border-black/10 bg-white/30 p-3 dark:bg-black/15">
+                      <p className="text-xs font-semibold uppercase opacity-70">Coverage gap (private payer)</p>
+                      <p className="mt-1 text-sm">{result.coverageGap}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold uppercase opacity-70">Product monograph (Health Canada)</p>
+                    <p className="mt-1 text-sm">{PRODUCT_MONOGRAPH[product]}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {result.dispensingContext && (
             <div className="rounded-lg border border-black/10 bg-white/40 p-3 text-sm dark:bg-black/20">
               <p className="font-semibold">Dispensing context</p>
               <p className="mt-1">{result.dispensingContext}</p>
             </div>
           )}
+          <div className="border-t border-black/10 pt-3">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-sm font-medium underline opacity-70 hover:opacity-100"
+            >
+              Start new patient
+            </button>
+          </div>
         </div>
       )}
     </div>
