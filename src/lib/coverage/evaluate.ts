@@ -39,11 +39,28 @@ function ontarioAdultRiskMet(c: ConditionId[]) {
   );
 }
 
+/** Beyfortus public infant programs use an under-24-months window. Combine years + months so e.g. 2y 0m is not misread when only the months field was filled. */
+function totalAgeMonthsForBeyfortus(input: CoverageInput): "unknown" | number {
+  const y = input.ageYears;
+  const m = input.ageMonths;
+  if (Number.isNaN(y) || y < 0) return "unknown";
+  if (m !== undefined && !Number.isNaN(m)) {
+    return y * 12 + m;
+  }
+  if (y >= 2) {
+    return y * 12;
+  }
+  return "unknown";
+}
+
+const BEYFORTUS_MAX_AGE_MONTHS = 23;
+const BEYFORTUS_NOT_COVERED_RATIONALE_ON =
+  "Ontario's infant RSV program describes Beyfortus for eligible infants under 24 months meeting program criteria—not at or above 24 months.";
+
 function evaluateOntario(input: CoverageInput): CoverageResult {
   const {
     product,
     ageYears,
-    ageMonths,
     pregnant,
     gestationalWeeks,
     deliverDuringRsvSeason,
@@ -53,26 +70,28 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
   } = input;
 
   if (product === "Beyfortus") {
-    if (ageMonths === undefined || Number.isNaN(ageMonths)) {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
       return result({
         outcome: "conditional",
         confidence: "low",
         rationale: [
-          "Beyfortus eligibility in Ontario depends on infant age under 24 months and specific high-risk criteria with pediatric specialist involvement.",
+          "Beyfortus eligibility in Ontario depends on total age under 24 months (years + months) and specific high-risk criteria with pediatric specialist involvement.",
         ],
-        missingInformation: ["Infant age in months"],
+        missingInformation: [
+          "Infant age: enter years and months (e.g. 1 year 6 months) so total age can be compared to the under-24-month program limit.",
+        ],
         primarySourceUrl: SOURCES.onPrograms,
         supportingSourceUrls: [SOURCES.hcBeyfortus],
       });
     }
-    if (ageMonths >= 24) {
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
       return result({
         outcome: "not_covered",
         confidence: "high",
-        rationale: [
-          "Ontario's infant RSV program describes Beyfortus for eligible infants under 24 months meeting program criteria—not at or above 24 months.",
-        ],
+        rationale: [BEYFORTUS_NOT_COVERED_RATIONALE_ON],
         primarySourceUrl: SOURCES.onPrograms,
+        supportingSourceUrls: [SOURCES.hcBeyfortus],
         declineReason: "Age not met — program requires infant under 24 months",
       });
     }
@@ -267,14 +286,44 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
   const { product, ageYears, conditionIds } = input;
 
   if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "Nova Scotia infant nirsevimab (Beyfortus) public funding follows provincial program criteria. Enter the child's age in years and months to compare against the under-24-month framing used for infant monoclonal programs.",
+        ],
+        missingInformation: [
+          "Infant age in years and months (total under 24 months is the usual funded window for infant RSV monoclonal programs—confirm with CDPD).",
+        ],
+        primarySourceUrl: SOURCES.hcBeyfortus,
+        supportingSourceUrls: [SOURCES.nsAdultFaq],
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "Public infant RSV monoclonal programs fund Beyfortus only for eligible children under 24 months. At or above 24 months total age does not match that funded infant window—confirm any exceptional pathways with Nova Scotia CDPD.",
+        ],
+        primarySourceUrl: SOURCES.hcBeyfortus,
+        supportingSourceUrls: [SOURCES.nsAdultFaq],
+        declineReason: "Age not met — infant program window is under 24 months",
+      });
+    }
     return result({
       outcome: "conditional",
-      confidence: "low",
+      confidence: "medium",
       rationale: [
-        "V0 models Nova Scotia's adult RSV program from the provincial FAQ. Infant / Beyfortus programs are not encoded—verify with Nova Scotia CDPD / program updates.",
+        "Child is under 24 months by total age. Nova Scotia publicly funded nirsevimab eligibility depends on current CDPD / immunization program criteria (risk groups, seasons, settings). The linked FAQ focuses on adult RSV; verify infant program details with CDPD.",
       ],
-      primarySourceUrl: SOURCES.nsAdultFaq,
-      supportingSourceUrls: [SOURCES.hcBeyfortus],
+      primarySourceUrl: SOURCES.hcBeyfortus,
+      supportingSourceUrls: [SOURCES.nsAdultFaq],
+      missingInformation: [
+        "Confirm the patient meets Nova Scotia–listed infant nirsevimab criteria on the current provincial program",
+      ],
     });
   }
 
@@ -332,14 +381,42 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
   const { product, ageYears, pregnant, gestationalWeeks, conditionIds } = input;
 
   if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "Québec MSSS PIQ covers RSV immunization including infant contexts; nirsevimab (Beyfortus) eligibility is age- and program-based. Enter years and months to assess the usual under-24-month infant window against the product monograph and PIQ.",
+        ],
+        missingInformation: ["Infant age in years and months"],
+        primarySourceUrl: SOURCES.qcPiq,
+        supportingSourceUrls: [SOURCES.hcBeyfortus],
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "Health Canada–authorized Beyfortus indications for RSV prevention target neonates/infants and eligible high-risk children under 24 months—not at or above 24 months total age. Québec funding follows MSSS rules tied to those indications; above 24 months does not match the funded infant monoclonal window.",
+        ],
+        primarySourceUrl: SOURCES.qcPiq,
+        supportingSourceUrls: [SOURCES.hcBeyfortus],
+        declineReason: "Age not met — infant nirsevimab window is under 24 months",
+      });
+    }
     return result({
       outcome: "conditional",
-      confidence: "low",
+      confidence: "medium",
       rationale: [
-        "Québec's PIQ page details Arexvy/Abrysvo indications; infant monoclonal programs are not modeled in V0—verify current MSSS bulletins.",
+        "Child is under 24 months by total age. Confirm nirsevimab funding, risk groups, and seasonality against the MSSS PIQ (VRS) page and any MSSS bulletins—VaxTrack does not enumerate every Québec infant criterion.",
       ],
       primarySourceUrl: SOURCES.qcPiq,
       supportingSourceUrls: [SOURCES.hcBeyfortus],
+      missingInformation: [
+        "Confirm patient meets current Québec-listed criteria for publicly funded nirsevimab",
+      ],
     });
   }
 
