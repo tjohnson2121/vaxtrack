@@ -14,6 +14,7 @@ export const coverageCheckBodyZ = z
     previouslyReceivedPublicAdultRsv: z.boolean().optional(),
     pediatricSpecialistDiscussed: z.boolean().optional(),
     conditionIds: z.array(conditionIdZ).default([]),
+    considerNaci: z.boolean().optional(),
   })
   .strict();
 

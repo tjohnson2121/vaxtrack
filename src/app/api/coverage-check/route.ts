@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { evaluateCoverage } from "@/lib/coverage/evaluate";
+import { evaluateCoverage, withPublicProgramPayerNote } from "@/lib/coverage/evaluate";
 import type { CoverageInput } from "@/lib/coverage/types";
 import { coverageCheckBodyZ } from "@/lib/server/coverage-check-body";
 import { getPublishedRulesForVaccine } from "@/lib/server/coverage-rule-queries";
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     previouslyReceivedPublicAdultRsv: b.previouslyReceivedPublicAdultRsv,
     pediatricSpecialistDiscussed: b.pediatricSpecialistDiscussed,
     conditionIds: b.conditionIds,
+    considerNaci: b.considerNaci,
   };
 
   if (b.vaccineId) {
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       if (fromRules) {
         return NextResponse.json({
           source: "published_rules" as const,
-          result: fromRules,
+          result: withPublicProgramPayerNote(fromRules),
         });
       }
     }

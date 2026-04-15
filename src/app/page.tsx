@@ -11,13 +11,19 @@ export default function Home() {
           VaxTrack
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-zinc-600 dark:text-zinc-400">
-          Structured public vaccine coverage checks with confidence and
-          rationale. This build covers{" "}
+          VaxTrack answers:{" "}
+          <strong className="text-zinc-800 dark:text-zinc-200">
+            who sits in the GreenShield coverage gap
+          </strong>{" "}
+          — the age band and clinical considerations where Health Canada&apos;s
+          product monograph allows use, the province does not pay, and (optionally)
+          NACI strength is applied. This pilot encodes{" "}
           <strong className="text-zinc-800 dark:text-zinc-200">RSV</strong> in{" "}
           <strong className="text-zinc-800 dark:text-zinc-200">
             Ontario, Quebec, and Nova Scotia
           </strong>
-          .
+          ; additional products (e.g. Shingrix) follow the same layering once rules
+          are published.
         </p>
         <div className="mt-10">
           <Link

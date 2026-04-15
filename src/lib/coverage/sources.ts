@@ -1,4 +1,6 @@
 export const SOURCES = {
+  hcDpdOnlineQuery:
+    "https://health-products.canada.ca/dpd-bdpp/index-eng.jsp",
   onPrograms:
     "https://www.ontario.ca/page/respiratory-syncytial-virus-rsv-prevention-programs",
   nsAdultFaq:

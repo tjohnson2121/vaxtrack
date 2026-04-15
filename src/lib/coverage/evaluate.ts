@@ -24,6 +24,17 @@ function result(
     declineReason: partial.declineReason,
     naciNote: partial.naciNote,
     coverageGap: partial.coverageGap,
+    publicProgramPayerNote: partial.publicProgramPayerNote,
+  };
+}
+
+/** When the province funds the dose, private payers should not duplicate that payment. */
+export function withPublicProgramPayerNote(r: CoverageResult): CoverageResult {
+  if (r.outcome !== "covered") return r;
+  return {
+    ...r,
+    publicProgramPayerNote:
+      "Public program appears to fund this scenario when program criteria are met — billing is usually provincial. GreenShield should not pay for the same dose or indication the province already covers.",
   };
 }
 
@@ -255,7 +266,9 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         naciNote:
           "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
         coverageGap:
-          "This patient does not meet Ontario's public criteria but NACI recommends RSV vaccination for all adults 60–74. Private-pay vaccination may be appropriate.",
+          input.considerNaci === true
+            ? "GreenShield gap (NACI-strong policy): none by default — NACI is discretionary (Grade B) for ages 60–74, while Ontario does not fund community patients without listed criteria. Turning “consider NACI” off shows the broader monograph-minus-province gap."
+            : "GreenShield gap (monograph minus province, NACI not used as a gate): adults 60–74 without Ontario high-risk or setting criteria are still within the Health Canada adult 60+ RSV indication, but the province does not pay — this is the subgroup where internal plan policy may fund if clinical review supports it.",
       });
     }
     return result({
@@ -373,7 +386,9 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
     naciNote:
       "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), including those in community settings.",
     coverageGap:
-      "Nova Scotia's public program covers specific care settings only. NACI recommends vaccination for all adults 60–74; private-pay may be appropriate for community-dwelling adults.",
+      input.considerNaci === true
+        ? "GreenShield gap (NACI-strong policy): none by default for this profile — community 60–74 is NACI discretionary while Nova Scotia funds only listed settings or ages 75+."
+        : "GreenShield gap (monograph minus province): adults 60–74 in the community match the Health Canada adult 60+ RSV indication, but Nova Scotia does not publicly fund that subgroup — internal plan policy may fund after clinical review.",
   });
 }
 
@@ -498,18 +513,23 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
 }
 
 export function evaluateCoverage(input: CoverageInput): CoverageResult {
+  let r: CoverageResult;
   switch (input.jurisdiction) {
     case "ON":
-      return evaluateOntario(input);
+      r = evaluateOntario(input);
+      break;
     case "NS":
-      return evaluateNovaScotia(input);
+      r = evaluateNovaScotia(input);
+      break;
     case "QC":
-      return evaluateQuebec(input);
+      r = evaluateQuebec(input);
+      break;
     default:
-      return result({
+      r = result({
         outcome: "conditional",
         confidence: "low",
         rationale: ["Unknown jurisdiction."],
       });
   }
+  return withPublicProgramPayerNote(r);
 }

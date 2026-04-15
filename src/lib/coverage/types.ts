@@ -27,6 +27,12 @@ export interface CoverageInput {
   previouslyReceivedPublicAdultRsv?: boolean;
   pediatricSpecialistDiscussed?: boolean;
   conditionIds: ConditionId[];
+  /**
+   * When true, GreenShield “gap” messaging funds only where NACI is a strong
+   * recommendation (Grade A) and the province does not pay. When false, gap
+   * follows Health Canada on-label indication minus provincial coverage.
+   */
+  considerNaci?: boolean;
 }
 
 export interface CoverageResult {
@@ -40,4 +46,6 @@ export interface CoverageResult {
   declineReason?: string;
   naciNote?: string;
   coverageGap?: string;
+  /** When the public program funds the dose, plans typically should not duplicate pay. */
+  publicProgramPayerNote?: string;
 }

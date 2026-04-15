@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ConditionId, Jurisdiction, RsvProduct } from "@/lib/coverage/types";
 import type { CoverageResult } from "@/lib/coverage/types";
+import { SOURCES } from "@/lib/coverage/sources";
 
 const JURISDICTIONS: { id: Jurisdiction; label: string }[] = [
   { id: "ON", label: "Ontario" },
@@ -95,6 +96,7 @@ export function CoverageCheckForm() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [showNaci, setShowNaci] = useState(false);
+  const [considerNaci, setConsiderNaci] = useState(false);
 
   const conditionIds: ConditionId[] = eligibilityFactor
     ? [eligibilityFactor]
@@ -140,6 +142,7 @@ export function CoverageCheckForm() {
     setResultSource(null);
     setError(null);
     setShowNaci(false);
+    setConsiderNaci(false);
   };
 
   const loadVaccinesWithPublishedRules = useCallback(async () => {
@@ -194,6 +197,7 @@ export function CoverageCheckForm() {
       previouslyReceivedPublicAdultRsv: prevPublic,
       pediatricSpecialistDiscussed: pedDiscussed,
       conditionIds,
+      considerNaci,
     };
 
     setChecking(true);
@@ -399,6 +403,29 @@ export function CoverageCheckForm() {
           </label>
         )}
 
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <label className="flex cursor-pointer items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={considerNaci}
+              onChange={(e) => setConsiderNaci(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                Consider NACI strength for the GreenShield gap
+              </span>
+              <span className="mt-1 block text-xs font-normal leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Off: show who is in scope under the Health Canada monograph but{" "}
+                <strong className="font-medium">not</strong> paid by the province
+                (wider plan gap). On: narrow the gap to patients where NACI is a{" "}
+                <strong className="font-medium">strong</strong> recommendation and
+                the province still does not pay.
+              </span>
+            </span>
+          </label>
+        </div>
+
         {filteredConditions.length > 0 && (
           <label className="flex flex-col gap-1 text-sm font-medium">
             Program eligibility criterion (optional)
@@ -447,7 +474,7 @@ export function CoverageCheckForm() {
           )}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-              Recommendation
+              Public program outcome
             </p>
             <p className="text-2xl font-bold capitalize">
               {result.outcome.replace("_", " ")}
@@ -457,15 +484,33 @@ export function CoverageCheckForm() {
                 Reason: {result.declineReason}
               </p>
             )}
-            <p className="mt-1 text-sm font-medium capitalize">
-              NACI recommendation:{" "}
-              {result.confidence === "high"
-                ? "Strong (Grade A)"
-                : result.confidence === "medium"
-                ? "Discretionary (Grade B)"
-                : "Conditional / Insufficient evidence"}
+            <p className="mt-1 text-xs leading-relaxed opacity-80">
+              “Covered” here means the province&apos;s criteria appear met — not
+              private insurance. Rule match confidence:{" "}
+              <span className="font-semibold capitalize">{result.confidence}</span>
+              . See NACI text below for clinical grades where provided.
             </p>
           </div>
+          {result.publicProgramPayerNote && (
+            <div className="rounded-md border border-black/15 bg-white/50 p-3 text-sm dark:bg-black/25">
+              <p className="text-xs font-semibold uppercase opacity-80">
+                Duplicate payment check
+              </p>
+              <p className="mt-1">{result.publicProgramPayerNote}</p>
+            </div>
+          )}
+          {result.coverageGap && (
+            <div className="rounded-md border border-black/15 bg-white/50 p-3 text-sm dark:bg-black/25">
+              <p className="text-xs font-semibold uppercase opacity-80">
+                GreenShield coverage gap
+              </p>
+              <p className="mt-1">{result.coverageGap}</p>
+              <p className="mt-2 text-xs opacity-70">
+                NACI filter in this check:{" "}
+                <strong>{considerNaci ? "On (strong only)" : "Off (monograph − province)"}</strong>
+              </p>
+            </div>
+          )}
           <ul className="list-inside list-disc space-y-1 text-sm">
             {result.rationale.map((r, i) => (
               <li key={i}>{r}</li>
@@ -514,37 +559,41 @@ export function CoverageCheckForm() {
                 </ul>
               </div>
             )}
-          {(result.naciNote || result.coverageGap) && (
-            <div className="border-t border-black/10 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowNaci((v) => !v)}
-                className="text-xs font-semibold uppercase tracking-wide opacity-80 hover:opacity-100 underline"
-              >
-                {showNaci ? "Hide NACI guidance" : "Show NACI guidance"}
-              </button>
-              {showNaci && (
-                <div className="mt-3 space-y-3">
-                  {result.naciNote && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase opacity-70">NACI guidance</p>
-                      <p className="mt-1 text-sm">{result.naciNote}</p>
-                    </div>
-                  )}
-                  {result.coverageGap && (
-                    <div className="rounded-md border border-black/10 bg-white/30 p-3 dark:bg-black/15">
-                      <p className="text-xs font-semibold uppercase opacity-70">Coverage gap (private payer)</p>
-                      <p className="mt-1 text-sm">{result.coverageGap}</p>
-                    </div>
-                  )}
+          <div className="border-t border-black/10 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowNaci((v) => !v)}
+              className="text-xs font-semibold uppercase tracking-wide opacity-80 hover:opacity-100 underline"
+            >
+              {showNaci ? "Hide clinical & monograph detail" : "Show clinical & monograph detail"}
+            </button>
+            {showNaci && (
+              <div className="mt-3 space-y-3">
+                {result.naciNote ? (
                   <div>
-                    <p className="text-xs font-semibold uppercase opacity-70">Product monograph (Health Canada)</p>
-                    <p className="mt-1 text-sm">{PRODUCT_MONOGRAPH[product]}</p>
+                    <p className="text-xs font-semibold uppercase opacity-70">NACI (context)</p>
+                    <p className="mt-1 text-sm">{result.naciNote}</p>
                   </div>
+                ) : (
+                  <p className="text-xs opacity-70">No NACI snippet for this path in the built-in rules.</p>
+                )}
+                <div>
+                  <p className="text-xs font-semibold uppercase opacity-70">Product monograph (Health Canada)</p>
+                  <p className="mt-1 text-sm">{PRODUCT_MONOGRAPH[product]}</p>
+                  <p className="mt-2 text-xs">
+                    <a
+                      href={SOURCES.hcDpdOnlineQuery}
+                      className="break-all underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Health Canada Drug Product Database (DPD) — confirm DIN and indications
+                    </a>
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
           {result.dispensingContext && (
             <div className="rounded-lg border border-black/10 bg-white/40 p-3 text-sm dark:bg-black/20">
               <p className="font-semibold">Dispensing context</p>
