@@ -1,8 +1,37 @@
-import type { ConditionId, CoverageInput, CoverageResult } from "./types";
+import type { ConditionId, CoverageInput, CoverageResult, NaciVsHcGap } from "./types";
 import { SOURCES } from "./sources";
+import { evaluateShingles } from "./evaluate-shingles";
 
 const ON_PHARMACY_CONTEXT =
   "Ontario's MOH states that free RSV immunizations are not available through pharmacies for older adults, infants and high-risk children, and pregnant individuals; publicly funded supply is ordered via public health / OGPMSS. Patients using pharmacy may pay out of pocket with a prescription.";
+
+// ─── HC-vs-NACI gap objects (RSV) ─────────────────────────────────────────────
+
+const RSV_NACI_VS_HC_75PLUS: NaciVsHcGap = {
+  hcIndication: "Adults 60+ (single dose)",
+  naciGrade: "Grade A · Adults 75+",
+  alignment: "full",
+};
+
+const RSV_NACI_VS_HC_60_74: NaciVsHcGap = {
+  hcIndication: "Adults 60+ (single dose)",
+  naciGrade: "Grade B · Adults 60–74 (discretionary)",
+  alignment: "partial",
+  gapDetail: "Ages 60–74 are HC-approved but only NACI Grade B — not a strong-gap candidate under a NACI Grade A funding gate",
+};
+
+const RSV_NACI_VS_HC_PREGNANT: NaciVsHcGap = {
+  hcIndication: "Pregnant individuals 24–36 weeks gestation (Abrysvo)",
+  naciGrade: "Grade A · Pregnant 28–36 weeks (RSV season)",
+  alignment: "partial",
+  gapDetail: "24–27 weeks: HC-approved but outside the NACI Grade A window",
+};
+
+const RSV_NACI_VS_HC_BEYFORTUS: NaciVsHcGap = {
+  hcIndication: "Neonates/infants (first season); high-risk children under 24 months",
+  naciGrade: "Grade A · All infants (first RSV season)",
+  alignment: "full",
+};
 
 function has(c: ConditionId[], id: ConditionId) {
   return c.includes(id);
@@ -24,6 +53,7 @@ function result(
     declineReason: partial.declineReason,
     naciNote: partial.naciNote,
     coverageGap: partial.coverageGap,
+    naciVsHcGap: partial.naciVsHcGap,
     publicProgramPayerNote: partial.publicProgramPayerNote,
   };
 }
@@ -68,6 +98,81 @@ const BEYFORTUS_MAX_AGE_MONTHS = 23;
 const BEYFORTUS_NOT_COVERED_RATIONALE_ON =
   "Ontario's infant RSV program describes Beyfortus for eligible infants under 24 months meeting program criteria—not at or above 24 months.";
 
+// ─── Stub helper for provinces with limited encoded rules ────────────────────
+
+function rsvProvinceStub(
+  jurisdictionName: string,
+  sourceUrl: string,
+  input: CoverageInput,
+  knownNote?: string,
+): CoverageResult {
+  const { product, ageYears, considerNaci } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM !== "unknown" && totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "Public infant RSV monoclonal programs fund Beyfortus for eligible children under 24 months. At or above 24 months does not match the funded infant window.",
+        ],
+        primarySourceUrl: sourceUrl,
+        supportingSourceUrls: [SOURCES.hcBeyfortus],
+        declineReason: "Age not met — infant program window is under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "low",
+      rationale: [
+        `${jurisdictionName} infant nirsevimab (Beyfortus) eligibility requires verification against current provincial program criteria.`,
+      ],
+      primarySourceUrl: sourceUrl,
+      supportingSourceUrls: [SOURCES.hcBeyfortus, SOURCES.naciOlderAdults],
+      missingInformation: [
+        `Confirm current ${jurisdictionName} Beyfortus eligibility at the linked source`,
+      ],
+      naciNote: "NACI strongly recommends (Grade A) nirsevimab for all infants entering their first RSV season.",
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  // Adult RSV (Abrysvo / Arexvy)
+  const naciNote =
+    ageYears >= 75
+      ? "NACI strongly recommends (Grade A) RSV vaccination for all adults 75 and older."
+      : ageYears >= 60
+      ? "NACI discretionarily recommends (Grade B) RSV vaccination for adults 60–74."
+      : "NACI guidance on RSV vaccination for adults under 60 without high-risk conditions is limited.";
+
+  const naciVsHcGap =
+    ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74;
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: [
+      knownNote ??
+        `${jurisdictionName}'s RSV program eligibility requires verification at the provincial source. Check the linked URL for current criteria, age thresholds, and funded products.`,
+    ],
+    primarySourceUrl: sourceUrl,
+    supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
+    missingInformation: [
+      `Confirm current ${jurisdictionName} adult RSV program eligibility at the linked source`,
+    ],
+    naciNote,
+    naciVsHcGap,
+    coverageGap:
+      considerNaci === true
+        ? `GreenShield gap (NACI-strong policy): ${ageYears >= 75 ? "Adults 75+ — NACI Grade A aligns with HC; check if province funds." : "Adults 60–74 — NACI is Grade B only; not a strong-gap candidate under NACI-gate policy."} Verify ${jurisdictionName} program at the linked source.`
+        : `GreenShield gap (monograph minus province): Adults 60+ are within the Health Canada adult RSV indication. Verify ${jurisdictionName}'s public program to identify the funded subgroup and the unfunded gap.`,
+  });
+}
+
+// ─── Ontario ──────────────────────────────────────────────────────────────────
+
 function evaluateOntario(input: CoverageInput): CoverageResult {
   const {
     product,
@@ -94,6 +199,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.onPrograms,
         supportingSourceUrls: [SOURCES.hcBeyfortus],
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
@@ -104,6 +210,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.onPrograms,
         supportingSourceUrls: [SOURCES.hcBeyfortus],
         declineReason: "Age not met — program requires infant under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     if (has(conditionIds, "chronic_lung_prematurity")) {
@@ -118,6 +225,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
             "Confirm discussion with pediatrician / pediatric specialist per program requirements",
           ],
           primarySourceUrl: SOURCES.onPrograms,
+          naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
         });
       }
       return result({
@@ -130,6 +238,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         dispensingContext: ON_PHARMACY_CONTEXT,
         naciNote:
           "NACI strongly recommends nirsevimab (Beyfortus) for all infants entering their first RSV season and for high-risk children in the second season (Grade A).",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     return result({
@@ -142,6 +251,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         "Confirm infant meets an Ontario-listed high-risk criterion",
       ],
       primarySourceUrl: SOURCES.onPrograms,
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
     });
   }
 
@@ -156,6 +266,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         missingInformation: ["Gestational age (weeks)"],
         primarySourceUrl: SOURCES.onPrograms,
         supportingSourceUrls: [SOURCES.hcAbrysvo],
+        naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
       });
     }
     if (gestationalWeeks < 32 || gestationalWeeks > 36) {
@@ -168,6 +279,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.onPrograms,
         declineReason:
           "Gestational age outside program window — 32–36 weeks gestation required",
+        naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
       });
     }
     if (!deliverDuringRsvSeason) {
@@ -181,6 +293,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
           "Confirm expected delivery during the RSV season per MOH guidance",
         ],
         primarySourceUrl: SOURCES.onPrograms,
+        naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
       });
     }
     return result({
@@ -194,6 +307,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
       dispensingContext: ON_PHARMACY_CONTEXT,
       naciNote:
         "NACI strongly recommends Abrysvo for pregnant individuals at 28–36 weeks gestation during RSV season (Grade A).",
+      naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
     });
   }
 
@@ -206,6 +320,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
       ],
       primarySourceUrl: SOURCES.onPrograms,
       supportingSourceUrls: [SOURCES.hcArexvy],
+      naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
     });
   }
 
@@ -220,6 +335,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.onPrograms,
         declineReason:
           "Previously received a publicly funded adult RSV dose — one-dose limit applies under the Ontario program",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
       });
     }
     if (ageYears >= 75) {
@@ -234,6 +350,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         dispensingContext: ON_PHARMACY_CONTEXT,
         naciNote:
           "NACI strongly recommends RSV vaccination for all adults 75 years and older (Grade A).",
+        naciVsHcGap: RSV_NACI_VS_HC_75PLUS,
       });
     }
     if (ageYears >= 60 && ageYears <= 74) {
@@ -249,6 +366,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
           dispensingContext: ON_PHARMACY_CONTEXT,
           naciNote:
             "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B). This patient also qualifies under Ontario's public program.",
+          naciVsHcGap: RSV_NACI_VS_HC_60_74,
         });
       }
       return result({
@@ -265,9 +383,10 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
           "No qualifying high-risk criterion selected for the 60–74 age band",
         naciNote:
           "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74,
         coverageGap:
           input.considerNaci === true
-            ? "GreenShield gap (NACI-strong policy): none by default — NACI is discretionary (Grade B) for ages 60–74, while Ontario does not fund community patients without listed criteria. Turning “consider NACI” off shows the broader monograph-minus-province gap."
+            ? "GreenShield gap (NACI-strong policy): none by default — NACI is discretionary (Grade B) for ages 60–74, while Ontario does not fund community patients without listed criteria. Turning \u201Cconsider NACI\u201D off shows the broader monograph-minus-province gap."
             : "GreenShield gap (monograph minus province, NACI not used as a gate): adults 60–74 without Ontario high-risk or setting criteria are still within the Health Canada adult 60+ RSV indication, but the province does not pay — this is the subgroup where internal plan policy may fund if clinical review supports it.",
       });
     }
@@ -282,6 +401,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         "Outside eligible age range — Ontario's adult RSV public program covers ages 60–74 with high-risk criteria, or 75+",
       naciNote:
         "NACI guidance on RSV vaccination for adults under 60 without high-risk conditions is limited.",
+      naciVsHcGap: RSV_NACI_VS_HC_60_74,
     });
   }
 
@@ -294,6 +414,8 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
     primarySourceUrl: SOURCES.onPrograms,
   });
 }
+
+// ─── Nova Scotia ──────────────────────────────────────────────────────────────
 
 function evaluateNovaScotia(input: CoverageInput): CoverageResult {
   const { product, ageYears, conditionIds } = input;
@@ -312,6 +434,7 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.hcBeyfortus,
         supportingSourceUrls: [SOURCES.nsAdultFaq],
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
@@ -324,6 +447,7 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.hcBeyfortus,
         supportingSourceUrls: [SOURCES.nsAdultFaq],
         declineReason: "Age not met — infant program window is under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     return result({
@@ -337,6 +461,7 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
       missingInformation: [
         "Confirm the patient meets Nova Scotia–listed infant nirsevimab criteria on the current provincial program",
       ],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
     });
   }
 
@@ -351,6 +476,7 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
       supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
       naciNote:
         "NACI strongly recommends RSV vaccination for all adults 75 and older (Grade A).",
+      naciVsHcGap: RSV_NACI_VS_HC_75PLUS,
     });
   }
 
@@ -368,6 +494,7 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
       primarySourceUrl: SOURCES.nsAdultFaq,
       naciNote:
         "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B). This patient also meets Nova Scotia's care setting criterion.",
+      naciVsHcGap: RSV_NACI_VS_HC_60_74,
     });
   }
 
@@ -385,12 +512,15 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
       "Age or care setting criterion not met — Nova Scotia's public program requires 75+, or 60+ in LTC/nursing home/RCF/hospital awaiting placement",
     naciNote:
       "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), including those in community settings.",
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
     coverageGap:
       input.considerNaci === true
         ? "GreenShield gap (NACI-strong policy): none by default for this profile — community 60–74 is NACI discretionary while Nova Scotia funds only listed settings or ages 75+."
         : "GreenShield gap (monograph minus province): adults 60–74 in the community match the Health Canada adult 60+ RSV indication, but Nova Scotia does not publicly fund that subgroup — internal plan policy may fund after clinical review.",
   });
 }
+
+// ─── Quebec ───────────────────────────────────────────────────────────────────
 
 function evaluateQuebec(input: CoverageInput): CoverageResult {
   const { product, ageYears, pregnant, gestationalWeeks, conditionIds } = input;
@@ -407,6 +537,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         missingInformation: ["Infant age in years and months"],
         primarySourceUrl: SOURCES.qcPiq,
         supportingSourceUrls: [SOURCES.hcBeyfortus],
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
@@ -419,6 +550,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.qcPiq,
         supportingSourceUrls: [SOURCES.hcBeyfortus],
         declineReason: "Age not met — infant nirsevimab window is under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
       });
     }
     return result({
@@ -432,6 +564,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
       missingInformation: [
         "Confirm patient meets current Québec-listed criteria for publicly funded nirsevimab",
       ],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
     });
   }
 
@@ -445,6 +578,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         ],
         missingInformation: ["Gestational age (weeks)"],
         primarySourceUrl: SOURCES.qcPiq,
+        naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
       });
     }
     if (gestationalWeeks >= 32 && gestationalWeeks <= 36) {
@@ -458,6 +592,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         supportingSourceUrls: [SOURCES.hcAbrysvo],
         naciNote:
           "NACI strongly recommends Abrysvo for pregnant individuals at 28–36 weeks gestation during RSV season (Grade A).",
+        naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
       });
     }
     return result({
@@ -467,6 +602,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         "Abrysvo maternal dosing in Québec is tied to 32–36 weeks gestation per PIQ; outside that window does not match the stated indication.",
       ],
       primarySourceUrl: SOURCES.qcPiq,
+      naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
     });
   }
 
@@ -482,6 +618,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
         naciNote:
           "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B) and strongly recommends for adults 75+ (Grade A).",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
       });
     }
     if (
@@ -497,6 +634,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.qcPiq,
         naciNote:
           "NACI notes that adults with transplant history or dialysis may have heightened RSV risk.",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74,
       });
     }
   }
@@ -512,18 +650,116 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
   });
 }
 
+// ─── Alberta ──────────────────────────────────────────────────────────────────
+
+function evaluateAlberta(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub(
+    "Alberta",
+    SOURCES.abRsv,
+    input,
+    "As of March 2025, Alberta expanded its RSV immunization program — verify current eligibility (age thresholds, high-risk criteria) at the Alberta Pharmacy link.",
+  );
+}
+
+// ─── British Columbia ─────────────────────────────────────────────────────────
+
+function evaluateBC(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub("British Columbia", SOURCES.bcRsv, input);
+}
+
+// ─── Manitoba ─────────────────────────────────────────────────────────────────
+
+function evaluateManitoba(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub("Manitoba", SOURCES.mbRsv, input);
+}
+
+// ─── New Brunswick ────────────────────────────────────────────────────────────
+
+function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub("New Brunswick", SOURCES.nbRsv, input);
+}
+
+// ─── Newfoundland & Labrador ──────────────────────────────────────────────────
+
+function evaluateNL(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub(
+    "Newfoundland & Labrador",
+    SOURCES.nlRsv,
+    input,
+    "Newfoundland & Labrador announced expanded RSV prevention programming in March 2025 — verify current eligibility at the provincial health release.",
+  );
+}
+
+// ─── PEI ─────────────────────────────────────────────────────────────────────
+
+function evaluatePEI(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub(
+    "PEI",
+    SOURCES.peRsv,
+    input,
+    "PEI expanded RSV protection for infants and seniors — verify current eligibility at the provincial announcement.",
+  );
+}
+
+// ─── Saskatchewan ─────────────────────────────────────────────────────────────
+
+function evaluateSK(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub("Saskatchewan", SOURCES.skRsv, input);
+}
+
+// ─── Territories ─────────────────────────────────────────────────────────────
+
+function evaluateNT(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub(
+    "Northwest Territories",
+    SOURCES.ntRsv,
+    input,
+    "Verify RSV immunization eligibility with NWT Health and Social Services using the immunization schedule for health care professionals.",
+  );
+}
+
+function evaluateNU(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub(
+    "Nunavut",
+    SOURCES.nuRsv,
+    input,
+    "Nunavut launched an RSV Prevention Program in December 2024 — verify current eligibility at the territorial health announcement.",
+  );
+}
+
+function evaluateYT(input: CoverageInput): CoverageResult {
+  return rsvProvinceStub(
+    "Yukon",
+    SOURCES.ytRsv,
+    input,
+    "Verify RSV vaccine eligibility with Yukon Immunization Program using the linked YIP Manual section on RSV vaccines.",
+  );
+}
+
+// ─── Main dispatcher ──────────────────────────────────────────────────────────
+
 export function evaluateCoverage(input: CoverageInput): CoverageResult {
+  // Shingrix / Shingles pathway
+  if (input.product === "Shingrix") {
+    return withPublicProgramPayerNote(evaluateShingles(input));
+  }
+
+  // RSV pathway
   let r: CoverageResult;
   switch (input.jurisdiction) {
-    case "ON":
-      r = evaluateOntario(input);
-      break;
-    case "NS":
-      r = evaluateNovaScotia(input);
-      break;
-    case "QC":
-      r = evaluateQuebec(input);
-      break;
+    case "ON": r = evaluateOntario(input); break;
+    case "NS": r = evaluateNovaScotia(input); break;
+    case "QC": r = evaluateQuebec(input); break;
+    case "AB": r = evaluateAlberta(input); break;
+    case "BC": r = evaluateBC(input); break;
+    case "MB": r = evaluateManitoba(input); break;
+    case "NB": r = evaluateNewBrunswick(input); break;
+    case "NL": r = evaluateNL(input); break;
+    case "PE": r = evaluatePEI(input); break;
+    case "SK": r = evaluateSK(input); break;
+    case "NT": r = evaluateNT(input); break;
+    case "NU": r = evaluateNU(input); break;
+    case "YT": r = evaluateYT(input); break;
     default:
       r = result({
         outcome: "conditional",

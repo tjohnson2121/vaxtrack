@@ -4,8 +4,10 @@ import { conditionIdZ } from "@/lib/rules/schema";
 export const coverageCheckBodyZ = z
   .object({
     vaccineId: z.string().uuid().optional(),
-    jurisdiction: z.enum(["ON", "QC", "NS"]),
-    product: z.enum(["Abrysvo", "Arexvy", "Beyfortus"]),
+    jurisdiction: z.enum([
+      "ON", "QC", "NS", "AB", "BC", "MB", "NB", "NL", "PE", "SK", "NT", "NU", "YT",
+    ]),
+    product: z.enum(["Abrysvo", "Arexvy", "Beyfortus", "Shingrix"]),
     ageYears: z.number().nonnegative(),
     ageMonths: z.number().nonnegative().optional(),
     pregnant: z.boolean().optional(),
