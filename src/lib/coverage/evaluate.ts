@@ -165,9 +165,9 @@ function rsvProvinceStub(
     naciNote,
     naciVsHcGap,
     coverageGap:
-      considerNaci === true
-        ? `GreenShield gap (NACI-strong policy): ${ageYears >= 75 ? "Adults 75+ — NACI Grade A aligns with HC; check if province funds." : "Adults 60–74 — NACI is Grade B only; not a strong-gap candidate under NACI-gate policy."} Verify ${jurisdictionName} program at the linked source.`
-        : `GreenShield gap (monograph minus province): Adults 60+ are within the Health Canada adult RSV indication. Verify ${jurisdictionName}'s public program to identify the funded subgroup and the unfunded gap.`,
+      considerNaci === true && ageYears < 75
+        ? undefined  // Grade B only for 60–74 — not a gap under NACI Grade A gate
+        : `Adults ${ageYears >= 75 ? "75+" : "60–74"} are within the Health Canada RSV indication — verify ${jurisdictionName}'s funded group to identify the unfunded gap.`,
   });
 }
 
@@ -386,8 +386,8 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         naciVsHcGap: RSV_NACI_VS_HC_60_74,
         coverageGap:
           input.considerNaci === true
-            ? "GreenShield gap (NACI-strong policy): none by default — NACI is discretionary (Grade B) for ages 60–74, while Ontario does not fund community patients without listed criteria. Turning \u201Cconsider NACI\u201D off shows the broader monograph-minus-province gap."
-            : "GreenShield gap (monograph minus province, NACI not used as a gate): adults 60–74 without Ontario high-risk or setting criteria are still within the Health Canada adult 60+ RSV indication, but the province does not pay — this is the subgroup where internal plan policy may fund if clinical review supports it.",
+            ? undefined  // NACI Grade B only for 60–74 — not a gap under Grade A gate
+            : "Adults 60–74 are HC-approved for RSV but Ontario doesn't fund this group without high-risk criteria.",
       });
     }
     return result({
@@ -515,8 +515,8 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
     naciVsHcGap: RSV_NACI_VS_HC_60_74,
     coverageGap:
       input.considerNaci === true
-        ? "GreenShield gap (NACI-strong policy): none by default for this profile — community 60–74 is NACI discretionary while Nova Scotia funds only listed settings or ages 75+."
-        : "GreenShield gap (monograph minus province): adults 60–74 in the community match the Health Canada adult 60+ RSV indication, but Nova Scotia does not publicly fund that subgroup — internal plan policy may fund after clinical review.",
+        ? undefined  // NACI Grade B only for community 60–74 — not a gap under Grade A gate
+        : "Adults 60–74 in the community are HC-approved for RSV but Nova Scotia doesn't publicly fund this group.",
   });
 }
 

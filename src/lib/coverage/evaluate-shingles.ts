@@ -57,10 +57,7 @@ function notFundedResult(
     primarySourceUrl: sourceUrl,
     supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles],
     declineReason: `Age not met — ${jurisdictionName} public program requires ${fundedAgeThreshold}+`,
-    coverageGap:
-      considerNaci === true
-        ? `GreenShield gap (NACI-strong policy): Adults 50–${fundedAgeThreshold - 1} are within the NACI Grade A recommendation for Shingrix, but ${jurisdictionName} does not publicly fund this age group. Strong gap candidate for private plan funding.`
-        : `GreenShield gap (monograph minus province): Adults 50–${fundedAgeThreshold - 1} are within the Health Canada approved indication for Shingrix, but ${jurisdictionName} does not publicly fund this age group.`,
+    coverageGap: `Adults 50–${fundedAgeThreshold - 1} are HC-approved and NACI Grade A for Shingrix, but ${jurisdictionName} doesn't publicly fund this age group.`,
     naciVsHcGap,
   });
 }
@@ -100,8 +97,7 @@ function evaluateOntarioShingles(input: CoverageInput): CoverageResult {
       supportingSourceUrls: [SOURCES.naciShingles],
       missingInformation: ["Confirm Ontario currently funds Shingrix for immunocompromised adults under 65"],
       naciVsHcGap: HC_VS_NACI_GAP_IMMUNOCOMPROMISED,
-      coverageGap:
-        "GreenShield gap: NACI Grade A and HC indication support Shingrix for immunocompromised adults 18+, but Ontario's public program may not fund adults under 65 in this group — a strong candidate for private plan funding.",
+      coverageGap: "HC and NACI Grade A support Shingrix for immunocompromised adults 18+, but Ontario may not publicly fund adults under 65 in this group.",
     });
   }
   if (ageYears >= 65) {
@@ -276,10 +272,7 @@ function evaluateNewBrunswickShingles(input: CoverageInput): CoverageResult {
     primarySourceUrl: SOURCES.nbShingles,
     missingInformation: ["Verify New Brunswick Shingrix program eligibility at the linked source"],
     naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    coverageGap:
-      considerNaci === true
-        ? "GreenShield gap (NACI-strong): Adults 50–64 are within NACI Grade A for Shingrix; NB public funding details require verification."
-        : "GreenShield gap (monograph minus province): Adults 50–64 are within the HC indication for Shingrix; NB public funding details require verification.",
+    coverageGap: "Adults 50–64 are HC-approved and NACI Grade A for Shingrix; NB public funding details require verification.",
   });
 }
 
@@ -299,10 +292,7 @@ function evaluateNLShingles(input: CoverageInput): CoverageResult {
     supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles],
     missingInformation: ["Confirm current NL Shingrix program eligibility and age threshold"],
     naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    coverageGap:
-      considerNaci === true
-        ? "GreenShield gap (NACI-strong): NACI Grade A recommends Shingrix for adults 50+. NL provincial coverage details require verification at the linked source."
-        : "GreenShield gap (monograph minus province): HC approved Shingrix for adults 50+. NL provincial coverage details require verification.",
+    coverageGap: "Adults 50+ are HC-approved and NACI Grade A for Shingrix; NL program details require verification.",
   });
 }
 
@@ -350,10 +340,7 @@ function evaluateSKShingles(input: CoverageInput): CoverageResult {
     primarySourceUrl: SOURCES.skShingles,
     missingInformation: ["Verify Saskatchewan Shingrix program at the linked source"],
     naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    coverageGap:
-      considerNaci === true
-        ? "GreenShield gap (NACI-strong): Adults 50–64 are within NACI Grade A for Shingrix; SK public funding requires verification."
-        : "GreenShield gap (monograph minus province): Adults 50–64 are within HC indication for Shingrix; SK public funding requires verification.",
+    coverageGap: "Adults 50–64 are HC-approved and NACI Grade A for Shingrix; SK public funding requires verification.",
   });
 }
 
