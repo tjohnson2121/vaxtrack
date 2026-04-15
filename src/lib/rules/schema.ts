@@ -9,6 +9,7 @@ export const conditionIdZ = z.enum([
   "transplant",
   "homeless",
   "indigenous",
+  "immunocompromised_shingles",
 ]);
 
 export const whenClauseZ = z
@@ -33,9 +34,9 @@ export const coverageRuleZ = z
   .object({
     id: z.string().min(1),
     priority: z.number(),
-    jurisdiction: z.enum(["ON", "QC", "NS"]),
+    jurisdiction: z.enum(["ON", "QC", "NS", "AB", "BC", "MB", "NB", "NL", "PE", "SK", "NT", "NU", "YT"]),
     products: z
-      .array(z.enum(["Abrysvo", "Arexvy", "Beyfortus"]))
+      .array(z.enum(["Abrysvo", "Arexvy", "Beyfortus", "Shingrix"]))
       .min(1),
     when: whenClauseZ,
     outcome: z.enum(["covered", "not_covered", "conditional"]),

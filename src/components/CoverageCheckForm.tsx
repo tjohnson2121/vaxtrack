@@ -1,21 +1,74 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ConditionId, Jurisdiction, RsvProduct } from "@/lib/coverage/types";
+import type { ConditionId, Jurisdiction, NaciVsHcGap, VaccineProduct } from "@/lib/coverage/types";
 import type { CoverageResult } from "@/lib/coverage/types";
 import { SOURCES } from "@/lib/coverage/sources";
 
+function NaciVsHcGapCard({ gap }: { gap: NaciVsHcGap }) {
+  const alignmentConfig = {
+    full: {
+      label: "Aligned",
+      dot: "bg-emerald-500",
+      badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300",
+    },
+    partial: {
+      label: "Partial",
+      dot: "bg-amber-500",
+      badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
+    },
+    gap: {
+      label: "Gap",
+      dot: "bg-rose-500",
+      badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300",
+    },
+  }[gap.alignment];
+
+  return (
+    <div className="rounded-md border border-black/15 bg-white/50 p-3 dark:bg-black/25">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase opacity-80">HC vs NACI</p>
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${alignmentConfig.badge}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${alignmentConfig.dot}`} />
+          {alignmentConfig.label}
+        </span>
+      </div>
+      <div className="space-y-1.5 text-xs">
+        <div className="flex items-start gap-2">
+          <span className="w-10 shrink-0 rounded bg-zinc-200 px-1 py-0.5 text-center font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">HC</span>
+          <span className="opacity-90">{gap.hcIndication}</span>
+        </div>
+        <div className="flex items-start gap-2">
+          <span className="w-10 shrink-0 rounded bg-blue-100 px-1 py-0.5 text-center font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">NACI</span>
+          <span className="opacity-90">{gap.naciGrade}</span>
+        </div>
+        {gap.gapDetail && (
+          <div className="flex items-start gap-2 pt-0.5">
+            <span className="w-10 shrink-0 rounded bg-amber-100 px-1 py-0.5 text-center font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Gap</span>
+            <span className="opacity-80">{gap.gapDetail}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const JURISDICTIONS: { id: Jurisdiction; label: string }[] = [
-  { id: "ON", label: "Ontario" },
-  { id: "QC", label: "Quebec" },
+  { id: "AB", label: "Alberta" },
+  { id: "BC", label: "British Columbia" },
+  { id: "MB", label: "Manitoba" },
+  { id: "NB", label: "New Brunswick" },
+  { id: "NL", label: "Newfoundland & Labrador" },
   { id: "NS", label: "Nova Scotia" },
+  { id: "NT", label: "Northwest Territories" },
+  { id: "NU", label: "Nunavut" },
+  { id: "ON", label: "Ontario" },
+  { id: "PE", label: "PEI" },
+  { id: "QC", label: "Quebec" },
+  { id: "SK", label: "Saskatchewan" },
+  { id: "YT", label: "Yukon" },
 ];
 
-const PRODUCTS: { id: RsvProduct; label: string }[] = [
-  { id: "Abrysvo", label: "Abrysvo" },
-  { id: "Arexvy", label: "Arexvy" },
-  { id: "Beyfortus", label: "Beyfortus (nirsevimab)" },
-];
 
 const CONDITIONS: { id: ConditionId; label: string }[] = [
   {
@@ -44,42 +97,54 @@ const CONDITIONS: { id: ConditionId; label: string }[] = [
     id: "indigenous",
     label: "First Nations, Inuit, or Métis (ON 60–74 pathway)",
   },
+  {
+    id: "immunocompromised_shingles",
+    label: "Immunocompromising condition (Shingrix 18+ pathway)",
+  },
 ];
 
 // Province + product combinations that have relevant eligibility conditions
-const PROVINCE_CONDITIONS: Record<Jurisdiction, Partial<Record<RsvProduct, ConditionId[]>>> = {
+const PROVINCE_CONDITIONS: Partial<Record<Jurisdiction, Partial<Record<VaccineProduct, ConditionId[]>>>> = {
   ON: {
     Beyfortus: ["chronic_lung_prematurity"],
     Arexvy: ["lct_retirement_resident", "alc_hospital", "gn_immunocompromised", "dialysis", "transplant", "homeless", "indigenous"],
     Abrysvo: ["lct_retirement_resident", "alc_hospital", "gn_immunocompromised", "dialysis", "transplant", "homeless", "indigenous"],
+    Shingrix: ["immunocompromised_shingles"],
   },
   QC: {
     Beyfortus: [],
     Arexvy: ["transplant", "dialysis"],
     Abrysvo: ["transplant", "dialysis"],
+    Shingrix: [],
   },
   NS: {
     Beyfortus: [],
     Arexvy: ["lct_retirement_resident", "alc_hospital"],
     Abrysvo: ["lct_retirement_resident", "alc_hospital"],
+    Shingrix: [],
+  },
+  MB: {
+    Shingrix: ["immunocompromised_shingles"],
+    Arexvy: [],
+    Abrysvo: [],
+    Beyfortus: [],
   },
 };
 
-const PRODUCT_MONOGRAPH: Record<RsvProduct, string> = {
+const PRODUCT_MONOGRAPH: Partial<Record<VaccineProduct, string>> = {
   Arexvy: "Health Canada approved indication: Adults 60 years of age and older (single dose).",
   Abrysvo: "Health Canada approved indication: Adults 60 years of age and older; and pregnant individuals at 24–36 weeks gestation to protect infants in the first 6 months of life.",
   Beyfortus: "Health Canada approved indication: Neonates and infants for protection during their first RSV season; children up to 24 months at increased risk of severe RSV disease in a second season.",
+  Shingrix: "Health Canada approved indication: Prevention of herpes zoster (shingles) and post-herpetic neuralgia (PHN) in adults 50 years of age and older (2-dose series). Also indicated for immunocompromised adults 18 years and older.",
 };
 
 type VaccineOption = { id: string; name: string };
 
 export function CoverageCheckForm() {
-  const [vaccinesWithRules, setVaccinesWithRules] = useState<VaccineOption[]>(
-    []
-  );
+  const [vaccinesWithRules, setVaccinesWithRules] = useState<VaccineOption[]>([]);
   const [vaccineId, setVaccineId] = useState<string>("");
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction>("ON");
-  const [product, setProduct] = useState<RsvProduct>("Arexvy");
+  const [product, setProduct] = useState<VaccineProduct>("Arexvy");
   const [ageYears, setAgeYears] = useState<string>("72");
   const [ageMonths, setAgeMonths] = useState<string>("");
   const [pregnant, setPregnant] = useState(false);
@@ -87,23 +152,21 @@ export function CoverageCheckForm() {
   const [deliverRsv, setDeliverRsv] = useState(false);
   const [prevPublic, setPrevPublic] = useState(false);
   const [pedDiscussed, setPedDiscussed] = useState(false);
-  const [eligibilityFactor, setEligibilityFactor] = useState<
-    "" | ConditionId
-  >("");
+  const [eligibilityFactor, setEligibilityFactor] = useState<"" | ConditionId>("");
 
   const [result, setResult] = useState<CoverageResult | null>(null);
   const [resultSource, setResultSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [showNaci, setShowNaci] = useState(false);
-  const [considerNaci, setConsiderNaci] = useState(false);
 
-  const conditionIds: ConditionId[] = eligibilityFactor
-    ? [eligibilityFactor]
-    : [];
+  const conditionIds: ConditionId[] = eligibilityFactor ? [eligibilityFactor] : [];
 
-  const availableConditionIds = PROVINCE_CONDITIONS[jurisdiction]?.[product] ?? [];
-  const filteredConditions = CONDITIONS.filter((c) => (availableConditionIds as string[]).includes(c.id));
+  const availableConditionIds =
+    (PROVINCE_CONDITIONS[jurisdiction]?.[product] as ConditionId[] | undefined) ?? [];
+  const filteredConditions = CONDITIONS.filter((c) =>
+    (availableConditionIds as string[]).includes(c.id)
+  );
 
   useEffect(() => {
     if (eligibilityFactor && !(availableConditionIds as string[]).includes(eligibilityFactor)) {
@@ -113,12 +176,9 @@ export function CoverageCheckForm() {
 
   const parsed = useMemo(() => {
     const y = parseInt(ageYears, 10);
-    const m =
-      ageMonths.trim() === "" ? undefined : parseInt(ageMonths, 10);
+    const m = ageMonths.trim() === "" ? undefined : parseInt(ageMonths, 10);
     const g =
-      gestationalWeeks.trim() === ""
-        ? undefined
-        : parseInt(gestationalWeeks, 10);
+      gestationalWeeks.trim() === "" ? undefined : parseInt(gestationalWeeks, 10);
     return {
       ageYears: Number.isFinite(y) ? y : NaN,
       ageMonths: m === undefined || Number.isNaN(m) ? undefined : m,
@@ -142,7 +202,6 @@ export function CoverageCheckForm() {
     setResultSource(null);
     setError(null);
     setShowNaci(false);
-    setConsiderNaci(false);
   };
 
   const loadVaccinesWithPublishedRules = useCallback(async () => {
@@ -197,7 +256,6 @@ export function CoverageCheckForm() {
       previouslyReceivedPublicAdultRsv: prevPublic,
       pediatricSpecialistDiscussed: pedDiscussed,
       conditionIds,
-      considerNaci,
     };
 
     setChecking(true);
@@ -233,7 +291,8 @@ export function CoverageCheckForm() {
   };
 
   const outcomeStyles: Record<string, string> = {
-    covered: "bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-100 dark:border-emerald-700",
+    covered:
+      "bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-100 dark:border-emerald-700",
     not_covered:
       "bg-rose-100 text-rose-950 border-rose-300 dark:bg-rose-950/40 dark:text-rose-100 dark:border-rose-700",
     conditional:
@@ -253,8 +312,7 @@ export function CoverageCheckForm() {
             </p>
             <p className="mt-1 text-xs leading-relaxed">
               Custom Claude-extracted programs only appear here after a draft
-              rule set is published from vaccine sources admin. That page is
-              hidden in this build; drafts are never listed here.
+              rule set is published from vaccine sources admin.
             </p>
           </div>
         ) : (
@@ -273,15 +331,14 @@ export function CoverageCheckForm() {
               ))}
             </select>
             <span className="text-xs font-normal text-zinc-500">
-              Only vaccines with a published rule set are listed. Return to this
-              tab after publishing to refresh the list.
+              Only vaccines with a published rule set are listed.
             </span>
           </label>
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm font-medium">
-            Province
+            Province / Territory
             <select
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
               value={jurisdiction}
@@ -299,13 +356,16 @@ export function CoverageCheckForm() {
             <select
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
               value={product}
-              onChange={(e) => setProduct(e.target.value as RsvProduct)}
+              onChange={(e) => setProduct(e.target.value as VaccineProduct)}
             >
-              {PRODUCTS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
+              <optgroup label="RSV">
+                <option value="Abrysvo">Abrysvo</option>
+                <option value="Arexvy">Arexvy</option>
+                <option value="Beyfortus">Beyfortus (nirsevimab)</option>
+              </optgroup>
+              <optgroup label="Shingles">
+                <option value="Shingrix">Shingrix</option>
+              </optgroup>
             </select>
           </label>
         </div>
@@ -386,7 +446,7 @@ export function CoverageCheckForm() {
               Patient has already received a publicly funded adult RSV vaccine
             </label>
             <p className="ml-6 text-xs text-zinc-500">
-              Ontario's adult RSV program funds a single dose; a prior publicly funded dose makes the patient ineligible for repeat public funding.
+              Ontario&apos;s adult RSV program funds a single dose; a prior publicly funded dose makes the patient ineligible for repeat public funding.
             </p>
           </div>
         )}
@@ -398,33 +458,9 @@ export function CoverageCheckForm() {
               checked={pedDiscussed}
               onChange={(e) => setPedDiscussed(e.target.checked)}
             />
-            Pediatrician / pediatric specialist discussion documented (Ontario
-            infant program)
+            Pediatrician / pediatric specialist discussion documented (Ontario infant program)
           </label>
         )}
-
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
-          <label className="flex cursor-pointer items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={considerNaci}
-              onChange={(e) => setConsiderNaci(e.target.checked)}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                Consider NACI strength for the GreenShield gap
-              </span>
-              <span className="mt-1 block text-xs font-normal leading-relaxed text-zinc-600 dark:text-zinc-400">
-                Off: show who is in scope under the Health Canada monograph but{" "}
-                <strong className="font-medium">not</strong> paid by the province
-                (wider plan gap). On: narrow the gap to patients where NACI is a{" "}
-                <strong className="font-medium">strong</strong> recommendation and
-                the province still does not pay.
-              </span>
-            </span>
-          </label>
-        </div>
 
         {filteredConditions.length > 0 && (
           <label className="flex flex-col gap-1 text-sm font-medium">
@@ -445,7 +481,8 @@ export function CoverageCheckForm() {
               ))}
             </select>
             <span className="text-xs font-normal text-zinc-500">
-              Showing criteria relevant to {JURISDICTIONS.find(j => j.id === jurisdiction)?.label ?? jurisdiction} for this vaccine.
+              Showing criteria relevant to{" "}
+              {JURISDICTIONS.find((j) => j.id === jurisdiction)?.label ?? jurisdiction} for this vaccine.
             </span>
           </label>
         )}
@@ -461,9 +498,7 @@ export function CoverageCheckForm() {
       </form>
 
       {result && (
-        <div
-          className={`space-y-4 rounded-xl border p-6 ${outcomeStyles[result.outcome]}`}
-        >
+        <div className={`space-y-4 rounded-xl border p-6 ${outcomeStyles[result.outcome]}`}>
           {resultSource && (
             <p className="text-xs font-medium opacity-80">
               Source:{" "}
@@ -485,12 +520,13 @@ export function CoverageCheckForm() {
               </p>
             )}
             <p className="mt-1 text-xs leading-relaxed opacity-80">
-              “Covered” here means the province&apos;s criteria appear met — not
+              &quot;Covered&quot; here means the province&apos;s criteria appear met — not
               private insurance. Rule match confidence:{" "}
               <span className="font-semibold capitalize">{result.confidence}</span>
               . See NACI text below for clinical grades where provided.
             </p>
           </div>
+
           {result.publicProgramPayerNote && (
             <div className="rounded-md border border-black/15 bg-white/50 p-3 text-sm dark:bg-black/25">
               <p className="text-xs font-semibold uppercase opacity-80">
@@ -499,23 +535,18 @@ export function CoverageCheckForm() {
               <p className="mt-1">{result.publicProgramPayerNote}</p>
             </div>
           )}
-          {result.coverageGap && (
-            <div className="rounded-md border border-black/15 bg-white/50 p-3 text-sm dark:bg-black/25">
-              <p className="text-xs font-semibold uppercase opacity-80">
-                GreenShield coverage gap
-              </p>
-              <p className="mt-1">{result.coverageGap}</p>
-              <p className="mt-2 text-xs opacity-70">
-                NACI filter in this check:{" "}
-                <strong>{considerNaci ? "On (strong only)" : "Off (monograph − province)"}</strong>
-              </p>
-            </div>
+
+          {result.naciVsHcGap && (
+            <NaciVsHcGapCard gap={result.naciVsHcGap} />
           )}
+
+
           <ul className="list-inside list-disc space-y-1 text-sm">
             {result.rationale.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
           </ul>
+
           {result.missingInformation && result.missingInformation.length > 0 && (
             <div>
               <p className="text-xs font-semibold uppercase opacity-80">
@@ -528,6 +559,7 @@ export function CoverageCheckForm() {
               </ul>
             </div>
           )}
+
           <div className="text-sm">
             <span className="font-semibold">Primary source: </span>
             <a
@@ -539,26 +571,22 @@ export function CoverageCheckForm() {
               {result.primarySourceUrl}
             </a>
           </div>
-          {result.supportingSourceUrls &&
-            result.supportingSourceUrls.length > 0 && (
-              <div className="text-sm">
-                <p className="font-semibold">Supporting references</p>
-                <ul className="mt-1 list-inside list-disc">
-                  {result.supportingSourceUrls.map((u) => (
-                    <li key={u}>
-                      <a
-                        href={u}
-                        className="break-all underline"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {u}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+
+          {result.supportingSourceUrls && result.supportingSourceUrls.length > 0 && (
+            <div className="text-sm">
+              <p className="font-semibold">Supporting references</p>
+              <ul className="mt-1 list-inside list-disc">
+                {result.supportingSourceUrls.map((u) => (
+                  <li key={u}>
+                    <a href={u} className="break-all underline" target="_blank" rel="noreferrer">
+                      {u}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="border-t border-black/10 pt-3">
             <button
               type="button"
@@ -578,8 +606,12 @@ export function CoverageCheckForm() {
                   <p className="text-xs opacity-70">No NACI snippet for this path in the built-in rules.</p>
                 )}
                 <div>
-                  <p className="text-xs font-semibold uppercase opacity-70">Product monograph (Health Canada)</p>
-                  <p className="mt-1 text-sm">{PRODUCT_MONOGRAPH[product]}</p>
+                  <p className="text-xs font-semibold uppercase opacity-70">
+                    Product monograph (Health Canada)
+                  </p>
+                  <p className="mt-1 text-sm">
+                    {PRODUCT_MONOGRAPH[product] ?? "Confirm indications at the Health Canada DPD."}
+                  </p>
                   <p className="mt-2 text-xs">
                     <a
                       href={SOURCES.hcDpdOnlineQuery}
@@ -594,12 +626,14 @@ export function CoverageCheckForm() {
               </div>
             )}
           </div>
+
           {result.dispensingContext && (
             <div className="rounded-lg border border-black/10 bg-white/40 p-3 text-sm dark:bg-black/20">
               <p className="font-semibold">Dispensing context</p>
               <p className="mt-1">{result.dispensingContext}</p>
             </div>
           )}
+
           <div className="border-t border-black/10 pt-3">
             <button
               type="button"
