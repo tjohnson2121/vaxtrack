@@ -45,7 +45,7 @@ function notFundedResult(
   sourceUrl: string,
   ageYears: number,
   fundedAgeThreshold: number,
-  naciVsHcGap: string,
+  naciVsHcGap: NaciVsHcGap,
   considerNaci?: boolean,
 ): CoverageResult {
   return shinglesResult({
