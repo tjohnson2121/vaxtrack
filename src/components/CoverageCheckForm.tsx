@@ -5,6 +5,18 @@ import type { ConditionId, Jurisdiction, NaciVsHcGap, VaccineProduct } from "@/l
 import type { CoverageResult } from "@/lib/coverage/types";
 import { SOURCES } from "@/lib/coverage/sources";
 
+function GapCard({ gap }: { gap: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-800/40 dark:bg-amber-950/20">
+      <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+      <div>
+        <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">In GreenShield gap</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-amber-800/90 dark:text-amber-300/80">{gap}</p>
+      </div>
+    </div>
+  );
+}
+
 function NaciVsHcGapCard({ gap }: { gap: NaciVsHcGap }) {
   const alignmentConfig = {
     full: {
@@ -159,6 +171,7 @@ export function CoverageCheckForm() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [showNaci, setShowNaci] = useState(false);
+  const [considerNaci, setConsiderNaci] = useState(false);
 
   const conditionIds: ConditionId[] = eligibilityFactor ? [eligibilityFactor] : [];
 
@@ -202,6 +215,7 @@ export function CoverageCheckForm() {
     setResultSource(null);
     setError(null);
     setShowNaci(false);
+    setConsiderNaci(false);
   };
 
   const loadVaccinesWithPublishedRules = useCallback(async () => {
@@ -256,6 +270,7 @@ export function CoverageCheckForm() {
       previouslyReceivedPublicAdultRsv: prevPublic,
       pediatricSpecialistDiscussed: pedDiscussed,
       conditionIds,
+      considerNaci,
     };
 
     setChecking(true);
@@ -462,6 +477,37 @@ export function CoverageCheckForm() {
           </label>
         )}
 
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Gap gate</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Show gap where province doesn't fund…</p>
+          </div>
+          <div className="flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
+            <button
+              type="button"
+              onClick={() => setConsiderNaci(false)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                !considerNaci
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              HC monograph
+            </button>
+            <button
+              type="button"
+              onClick={() => setConsiderNaci(true)}
+              className={`border-l border-zinc-300 px-3 py-1.5 text-xs font-medium transition-colors dark:border-zinc-700 ${
+                considerNaci
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              NACI Grade A
+            </button>
+          </div>
+        </div>
+
         {filteredConditions.length > 0 && (
           <label className="flex flex-col gap-1 text-sm font-medium">
             Program eligibility criterion (optional)
@@ -536,9 +582,8 @@ export function CoverageCheckForm() {
             </div>
           )}
 
-          {result.naciVsHcGap && (
-            <NaciVsHcGapCard gap={result.naciVsHcGap} />
-          )}
+          {result.coverageGap && <GapCard gap={result.coverageGap} />}
+          {result.naciVsHcGap && <NaciVsHcGapCard gap={result.naciVsHcGap} />}
 
 
           <ul className="list-inside list-disc space-y-1 text-sm">
