@@ -73,8 +73,12 @@ function under50NotEligible(sourceUrl: string): CoverageResult {
     primarySourceUrl: sourceUrl,
     supportingSourceUrls: [SOURCES.naciShingles],
     declineReason: "Under 50 without immunocompromising condition — outside HC indication and NACI Grade A for immunocompetent adults",
-    naciVsHcGap:
-      "Adults under 50 without immunocompromise: Neither Health Canada's primary indication nor NACI Grade A recommendation covers this group. Confirm the HC DPD for any immunocompromising condition indications that may apply.",
+    naciVsHcGap: {
+      hcIndication: "Adults 50+ (2-dose series)",
+      naciGrade: "Grade A · Adults 50+",
+      alignment: "gap",
+      gapDetail: "Under 50 without immunocompromise — outside both HC indication and NACI Grade A",
+    },
   });
 }
 
