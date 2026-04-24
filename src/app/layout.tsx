@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "VaxTrack — Vaccine coverage decision support",
   description:
-    "Pharmacist-facing RSV public coverage checks (ON, QC, NS) with rationale and sources.",
+    "RSV public program alignment for Ontario, Quebec, and Nova Scotia with rationale and references.",
 };
 
 export default function RootLayout({

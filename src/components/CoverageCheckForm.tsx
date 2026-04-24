@@ -323,22 +323,23 @@ export function CoverageCheckForm() {
         {vaccinesWithRules.length === 0 ? (
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
             <p className="font-medium text-zinc-900 dark:text-zinc-100">
-              Using built-in reference logic only
+              Built-in rules
             </p>
             <p className="mt-1 text-xs leading-relaxed">
-              Custom Claude-extracted programs only appear here after a draft
-              rule set is published from vaccine sources admin.
+              When published program rules are available, they appear in the
+              vaccine program selector. Until then, this form uses the built-in
+              rules for the provinces below.
             </p>
           </div>
         ) : (
           <label className="flex flex-col gap-1 text-sm font-medium">
-            Vaccine program (optional — uses published Claude rule set)
+            Vaccine program (optional)
             <select
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
               value={vaccineId}
               onChange={(e) => setVaccineId(e.target.value)}
             >
-              <option value="">Built-in reference logic only</option>
+              <option value="">Built-in rules</option>
               {vaccinesWithRules.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
@@ -346,7 +347,8 @@ export function CoverageCheckForm() {
               ))}
             </select>
             <span className="text-xs font-normal text-zinc-500">
-              Only vaccines with a published rule set are listed.
+              Only vaccines with a published rule set are listed. Refresh this
+              page after publishing to update the list.
             </span>
           </label>
         )}
@@ -549,8 +551,8 @@ export function CoverageCheckForm() {
             <p className="text-xs font-medium opacity-80">
               Source:{" "}
               {resultSource === "published_rules"
-                ? "Published extracted rules"
-                : "Built-in reference logic"}
+                ? "Published program rules"
+                : "Built-in rules"}
             </p>
           )}
           <div>

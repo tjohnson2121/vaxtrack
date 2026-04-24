@@ -629,7 +629,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         outcome: "conditional",
         confidence: "medium",
         rationale: [
-          "Québec PIQ lists additional adult pathways (e.g., transplant history). V0 does not exhaust all PIQ bullets—verify remaining criteria on the MSSS page.",
+          "Québec PIQ lists additional adult pathways (e.g., transplant history). Encoded rules here are simplified — verify remaining criteria on the MSSS page.",
         ],
         primarySourceUrl: SOURCES.qcPiq,
         naciNote:
@@ -643,7 +643,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
     outcome: "conditional",
     confidence: "low",
     rationale: [
-      "Patient profile does not clearly match the simplified Québec rules encoded in V0; review MSSS PIQ indications for age bands 18–59 and residential categories.",
+      "Patient profile does not clearly match the simplified Québec rules used here; review MSSS PIQ indications for age bands 18–59 and residential categories.",
     ],
     primarySourceUrl: SOURCES.qcPiq,
     missingInformation: ["Review full Québec PIQ indication list for this patient"],

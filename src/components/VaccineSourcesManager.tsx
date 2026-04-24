@@ -273,7 +273,7 @@ export function VaccineSourcesManager() {
     await loadRuleSets(j.vaccineId);
     const n = j.ruleCount ?? 0;
     setSuccess(
-      `Claude saved a draft rule set (${n} rule${n === 1 ? "" : "s"}). Scroll to “Coverage rule sets” below and click Publish — only then will this vaccine appear on the Coverage check page.`
+      `Draft rule set saved (${n} rule${n === 1 ? "" : "s"}). Open “Coverage rule sets” below and click Publish so this vaccine appears on the coverage check page.`
     );
   };
 
@@ -520,7 +520,7 @@ export function VaccineSourcesManager() {
                                       }
                                       className="rounded border border-violet-400 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-900 hover:bg-violet-100 disabled:opacity-50 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-100 dark:hover:bg-violet-950"
                                     >
-                                      Extract rules (Claude)
+                                      Extract rules
                                     </button>
                                   )}
                                 <button
@@ -545,9 +545,9 @@ export function VaccineSourcesManager() {
                       Proposed rules (draft JSON or notes)
                     </p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      For human review before any future publish into the
-                      coverage engine. Status: draft → published (tracking
-                      only in V0).
+                      For human review before publishing into the coverage engine.
+                      Status moves from draft to published when you publish a rule
+                      set below.
                     </p>
                     <label className="mt-3 flex flex-col gap-1 text-sm">
                       Title (optional)
@@ -620,7 +620,7 @@ export function VaccineSourcesManager() {
 
                   <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900 dark:bg-violet-950/20">
                     <p className="text-sm font-medium text-violet-950 dark:text-violet-100">
-                      Coverage rule sets (Claude → draft → publish)
+                      Coverage rule sets (draft → publish)
                     </p>
                     <p className="mt-1 text-xs text-violet-900/80 dark:text-violet-200/80">
                       Extract rules only creates a draft. You must click Publish
@@ -630,8 +630,8 @@ export function VaccineSourcesManager() {
                     </p>
                     {(ruleSetsByVaccine[v.id] ?? []).length === 0 ? (
                       <p className="mt-2 text-xs text-zinc-500">
-                        No rule sets yet. Fetch a source, then use &quot;Extract
-                        rules (Claude)&quot; on a row with extracted text.
+                        No rule sets yet. Fetch a source, then use Extract rules
+                        on a row that has extracted text.
                       </p>
                     ) : (
                       <ul className="mt-3 space-y-2 border-t border-violet-200 pt-3 dark:border-violet-800">
