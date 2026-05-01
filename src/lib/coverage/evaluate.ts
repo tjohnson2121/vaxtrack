@@ -1,6 +1,16 @@
-import type { ConditionId, CoverageInput, CoverageResult, NaciVsHcGap } from "./types";
+import {
+  isCovidProduct,
+  isHpvProduct,
+  type ConditionId,
+  type CoverageInput,
+  type CoverageResult,
+  type NaciVsHcGap,
+} from "./types";
 import { SOURCES } from "./sources";
 import { evaluateShingles } from "./evaluate-shingles";
+import { evaluateHpv } from "./evaluate-hpv";
+import { evaluateCovid } from "./evaluate-covid";
+import { noEncodedProvincialProgramResult } from "./no-encoded-result";
 
 const ON_PHARMACY_CONTEXT =
   "Ontario's MOH states that free RSV immunizations are not available through pharmacies for older adults, infants and high-risk children, and pregnant individuals; publicly funded supply is ordered via public health / OGPMSS. Patients using pharmacy may pay out of pocket with a prescription.";
@@ -97,79 +107,6 @@ function totalAgeMonthsForBeyfortus(input: CoverageInput): "unknown" | number {
 const BEYFORTUS_MAX_AGE_MONTHS = 23;
 const BEYFORTUS_NOT_COVERED_RATIONALE_ON =
   "Ontario's infant RSV program describes Beyfortus for eligible infants under 24 months meeting program criteria—not at or above 24 months.";
-
-// ─── Stub helper for provinces with limited encoded rules ────────────────────
-
-function rsvProvinceStub(
-  jurisdictionName: string,
-  sourceUrl: string,
-  input: CoverageInput,
-  knownNote?: string,
-): CoverageResult {
-  const { product, ageYears, considerNaci } = input;
-
-  if (product === "Beyfortus") {
-    const totalM = totalAgeMonthsForBeyfortus(input);
-    if (totalM !== "unknown" && totalM > BEYFORTUS_MAX_AGE_MONTHS) {
-      return result({
-        outcome: "not_covered",
-        confidence: "high",
-        rationale: [
-          "Public infant RSV monoclonal programs fund Beyfortus for eligible children under 24 months. At or above 24 months does not match the funded infant window.",
-        ],
-        primarySourceUrl: sourceUrl,
-        supportingSourceUrls: [SOURCES.hcBeyfortus],
-        declineReason: "Age not met — infant program window is under 24 months",
-        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
-      });
-    }
-    return result({
-      outcome: "conditional",
-      confidence: "low",
-      rationale: [
-        `${jurisdictionName} infant nirsevimab (Beyfortus) eligibility requires verification against current provincial program criteria.`,
-      ],
-      primarySourceUrl: sourceUrl,
-      supportingSourceUrls: [SOURCES.hcBeyfortus, SOURCES.naciOlderAdults],
-      missingInformation: [
-        `Confirm current ${jurisdictionName} Beyfortus eligibility at the linked source`,
-      ],
-      naciNote: "NACI strongly recommends (Grade A) nirsevimab for all infants entering their first RSV season.",
-      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
-    });
-  }
-
-  // Adult RSV (Abrysvo / Arexvy)
-  const naciNote =
-    ageYears >= 75
-      ? "NACI strongly recommends (Grade A) RSV vaccination for all adults 75 and older."
-      : ageYears >= 60
-      ? "NACI discretionarily recommends (Grade B) RSV vaccination for adults 60–74."
-      : "NACI guidance on RSV vaccination for adults under 60 without high-risk conditions is limited.";
-
-  const naciVsHcGap =
-    ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74;
-
-  return result({
-    outcome: "conditional",
-    confidence: "low",
-    rationale: [
-      knownNote ??
-        `${jurisdictionName}'s RSV program eligibility requires verification at the provincial source. Check the linked URL for current criteria, age thresholds, and funded products.`,
-    ],
-    primarySourceUrl: sourceUrl,
-    supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
-    missingInformation: [
-      `Confirm current ${jurisdictionName} adult RSV program eligibility at the linked source`,
-    ],
-    naciNote,
-    naciVsHcGap,
-    coverageGap:
-      considerNaci === true && ageYears < 75
-        ? undefined  // Grade B only for 60–74 — not a gap under NACI Grade A gate
-        : `Adults ${ageYears >= 75 ? "75+" : "60–74"} are within the Health Canada RSV indication — verify ${jurisdictionName}'s funded group to identify the unfunded gap.`,
-  });
-}
 
 // ─── Ontario ──────────────────────────────────────────────────────────────────
 
@@ -557,7 +494,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
       outcome: "conditional",
       confidence: "medium",
       rationale: [
-        "Child is under 24 months by total age. Confirm nirsevimab funding, risk groups, and seasonality against the MSSS PIQ (VRS) page and any MSSS bulletins—VaxTrack does not enumerate every Québec infant criterion.",
+        "Child is under 24 months by total age. Confirm nirsevimab funding, risk groups, and seasonality against the MSSS PIQ (VRS) page and any MSSS bulletins.",
       ],
       primarySourceUrl: SOURCES.qcPiq,
       supportingSourceUrls: [SOURCES.hcBeyfortus],
@@ -653,87 +590,107 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
 // ─── Alberta ──────────────────────────────────────────────────────────────────
 
 function evaluateAlberta(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub(
-    "Alberta",
-    SOURCES.abRsv,
-    input,
-    "As of March 2025, Alberta expanded its RSV immunization program — verify current eligibility (age thresholds, high-risk criteria) at the Alberta Pharmacy link.",
-  );
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Alberta",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.abRsv,
+  });
 }
 
 // ─── British Columbia ─────────────────────────────────────────────────────────
 
 function evaluateBC(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub("British Columbia", SOURCES.bcRsv, input);
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "British Columbia",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.bcRsv,
+  });
 }
 
 // ─── Manitoba ─────────────────────────────────────────────────────────────────
 
 function evaluateManitoba(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub("Manitoba", SOURCES.mbRsv, input);
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Manitoba",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.mbRsv,
+  });
 }
 
 // ─── New Brunswick ────────────────────────────────────────────────────────────
 
 function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub("New Brunswick", SOURCES.nbRsv, input);
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "New Brunswick",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.nbRsv,
+  });
 }
 
 // ─── Newfoundland & Labrador ──────────────────────────────────────────────────
 
 function evaluateNL(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub(
-    "Newfoundland & Labrador",
-    SOURCES.nlRsv,
-    input,
-    "Newfoundland & Labrador announced expanded RSV prevention programming in March 2025 — verify current eligibility at the provincial health release.",
-  );
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Newfoundland & Labrador",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.nlRsv,
+  });
 }
 
 // ─── PEI ─────────────────────────────────────────────────────────────────────
 
 function evaluatePEI(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub(
-    "PEI",
-    SOURCES.peRsv,
-    input,
-    "PEI expanded RSV protection for infants and seniors — verify current eligibility at the provincial announcement.",
-  );
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Prince Edward Island",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.peRsv,
+  });
 }
 
 // ─── Saskatchewan ─────────────────────────────────────────────────────────────
 
 function evaluateSK(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub("Saskatchewan", SOURCES.skRsv, input);
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Saskatchewan",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.skRsv,
+  });
 }
 
 // ─── Territories ─────────────────────────────────────────────────────────────
 
 function evaluateNT(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub(
-    "Northwest Territories",
-    SOURCES.ntRsv,
-    input,
-    "Verify RSV immunization eligibility with NWT Health and Social Services using the immunization schedule for health care professionals.",
-  );
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Northwest Territories",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.ntRsv,
+  });
 }
 
 function evaluateNU(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub(
-    "Nunavut",
-    SOURCES.nuRsv,
-    input,
-    "Nunavut launched an RSV Prevention Program in December 2024 — verify current eligibility at the territorial health announcement.",
-  );
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Nunavut",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.nuRsv,
+  });
 }
 
 function evaluateYT(input: CoverageInput): CoverageResult {
-  return rsvProvinceStub(
-    "Yukon",
-    SOURCES.ytRsv,
-    input,
-    "Verify RSV vaccine eligibility with Yukon Immunization Program using the linked YIP Manual section on RSV vaccines.",
-  );
+  void input;
+  return noEncodedProvincialProgramResult({
+    jurisdictionDisplayName: "Yukon",
+    productLabel: "RSV vaccines",
+    primarySourceUrl: SOURCES.ytRsv,
+  });
 }
 
 // ─── Main dispatcher ──────────────────────────────────────────────────────────
@@ -742,6 +699,16 @@ export function evaluateCoverage(input: CoverageInput): CoverageResult {
   // Shingrix / Shingles pathway
   if (input.product === "Shingrix") {
     return withPublicProgramPayerNote(evaluateShingles(input));
+  }
+
+  // HPV — provincial criteria (evaluate-hpv.ts)
+  if (isHpvProduct(input.product)) {
+    return withPublicProgramPayerNote(evaluateHpv(input));
+  }
+
+  // COVID-19 vaccines
+  if (isCovidProduct(input.product)) {
+    return evaluateCovid(input);
   }
 
   // RSV pathway

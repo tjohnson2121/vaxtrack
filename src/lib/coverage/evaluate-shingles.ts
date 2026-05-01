@@ -1,5 +1,6 @@
 import type { ConditionId, CoverageInput, CoverageResult, NaciVsHcGap } from "./types";
 import { SOURCES } from "./sources";
+import { noEncodedProvincialProgramResult } from "./no-encoded-result";
 
 const NACI_SHINGLES_NOTE =
   "NACI strongly recommends (Grade A, 2025 update) Shingrix for all immunocompetent adults 50 years and older (2-dose series). NACI also strongly recommends (Grade A) Shingrix for immunocompromised adults 18 years and older.";
@@ -248,38 +249,6 @@ function evaluateManitobaShingles(input: CoverageInput): CoverageResult {
   return notFundedResult("Manitoba", SOURCES.mbShingles, ageYears, 65, HC_VS_NACI_GAP_50PLUS, considerNaci);
 }
 
-// ─── New Brunswick ────────────────────────────────────────────────────────────
-
-function evaluateNewBrunswickShingles(input: CoverageInput): CoverageResult {
-  const { ageYears, considerNaci } = input;
-
-  if (ageYears < 50) return under50NotEligible(SOURCES.nbShingles);
-  if (ageYears >= 65) {
-    return shinglesResult({
-      outcome: "conditional",
-      confidence: "medium",
-      rationale: [
-        "New Brunswick's pharmacy services page describes Shingrix coverage — confirm current eligibility and age threshold at the linked source.",
-      ],
-      primarySourceUrl: SOURCES.nbShingles,
-      supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles],
-      missingInformation: ["Verify current NB age threshold and any additional criteria"],
-      naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    });
-  }
-  return shinglesResult({
-    outcome: "not_covered",
-    confidence: "low",
-    rationale: [
-      "New Brunswick's Shingrix program details require verification. Patient is under 65 — check NB pharmacy services for current eligibility.",
-    ],
-    primarySourceUrl: SOURCES.nbShingles,
-    missingInformation: ["Verify New Brunswick Shingrix program eligibility at the linked source"],
-    naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    coverageGap: "Adults 50–64 are HC-approved and NACI Grade A for Shingrix; NB public funding details require verification.",
-  });
-}
-
 // ─── Newfoundland & Labrador ──────────────────────────────────────────────────
 
 function evaluateNLShingles(input: CoverageInput): CoverageResult {
@@ -375,18 +344,33 @@ function evaluateTerritoryShingles(
 
 export function evaluateShingles(input: CoverageInput): CoverageResult {
   switch (input.jurisdiction) {
+    case "NB":
+      return noEncodedProvincialProgramResult({
+        jurisdictionDisplayName: "New Brunswick",
+        productLabel: "Shingrix",
+        primarySourceUrl: SOURCES.nbShingles,
+      });
+    case "NT":
+      return noEncodedProvincialProgramResult({
+        jurisdictionDisplayName: "Northwest Territories",
+        productLabel: "Shingrix",
+        primarySourceUrl: SOURCES.cigShingles,
+      });
+    case "NU":
+      return noEncodedProvincialProgramResult({
+        jurisdictionDisplayName: "Nunavut",
+        productLabel: "Shingrix",
+        primarySourceUrl: SOURCES.cigShingles,
+      });
     case "ON": return evaluateOntarioShingles(input);
     case "QC": return evaluateQuebecShingles(input);
     case "NS": return evaluateNovaScotiaShingles(input);
     case "AB": return evaluateAlbertaShingles(input);
     case "BC": return evaluateBCShingles(input);
     case "MB": return evaluateManitobaShingles(input);
-    case "NB": return evaluateNewBrunswickShingles(input);
     case "NL": return evaluateNLShingles(input);
     case "PE": return evaluatePEIShingles(input);
     case "SK": return evaluateSKShingles(input);
-    case "NT": return evaluateTerritoryShingles("Northwest Territories", null, input);
-    case "NU": return evaluateTerritoryShingles("Nunavut", null, input);
     case "YT": return evaluateTerritoryShingles("Yukon", SOURCES.ytShingles, input);
   }
 }

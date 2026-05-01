@@ -7,7 +7,17 @@ export const coverageCheckBodyZ = z
     jurisdiction: z.enum([
       "ON", "QC", "NS", "AB", "BC", "MB", "NB", "NL", "PE", "SK", "NT", "NU", "YT",
     ]),
-    product: z.enum(["Abrysvo", "Arexvy", "Beyfortus", "Shingrix"]),
+    product: z.enum([
+      "Abrysvo",
+      "Arexvy",
+      "Beyfortus",
+      "Shingrix",
+      "CovidSpikevax",
+      "CovidMNEXSPIKE",
+      "CovidNUVAXOVID",
+      "HpvGardasil",
+      "HpvCervarix",
+    ]),
     ageYears: z.number().nonnegative(),
     ageMonths: z.number().nonnegative().optional(),
     pregnant: z.boolean().optional(),

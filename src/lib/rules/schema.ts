@@ -36,10 +36,22 @@ export const coverageRuleZ = z
     priority: z.number(),
     jurisdiction: z.enum(["ON", "QC", "NS", "AB", "BC", "MB", "NB", "NL", "PE", "SK", "NT", "NU", "YT"]),
     products: z
-      .array(z.enum(["Abrysvo", "Arexvy", "Beyfortus", "Shingrix"]))
+      .array(
+        z.enum([
+          "Abrysvo",
+          "Arexvy",
+          "Beyfortus",
+          "Shingrix",
+          "CovidSpikevax",
+          "CovidMNEXSPIKE",
+          "CovidNUVAXOVID",
+          "HpvGardasil",
+          "HpvCervarix",
+        ])
+      )
       .min(1),
     when: whenClauseZ,
-    outcome: z.enum(["covered", "not_covered", "conditional"]),
+    outcome: z.enum(["covered", "not_covered", "conditional", "no_data"]),
     confidence: z.enum(["high", "medium", "low"]),
     rationale: z.array(z.string()).min(1),
     primarySourceUrl: z.string().url(),

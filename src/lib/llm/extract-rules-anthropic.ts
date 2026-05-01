@@ -17,7 +17,7 @@ Each rule object MUST have:
 - id: string (unique slug, e.g. "on-adult-75-arexvy")
 - priority: number (lower numbers are evaluated first; use 10, 20, 30... to leave gaps)
 - jurisdiction: one of "ON","QC","NS" only
-- products: non-empty array of "Abrysvo","Arexvy","Beyfortus"
+- products: non-empty array of "Abrysvo","Arexvy","Beyfortus","Shingrix","CovidSpikevax","CovidMNEXSPIKE","CovidNUVAXOVID","HpvGardasil","HpvCervarix"
 - when: optional object with ONLY these optional keys as needed:
   minAgeYears, maxAgeYears, minAgeMonths, maxAgeMonths,
   pregnant (boolean),

@@ -17,9 +17,34 @@ export type RsvProduct = "Abrysvo" | "Arexvy" | "Beyfortus";
 
 export type ShinglesProduct = "Shingrix";
 
-export type VaccineProduct = RsvProduct | ShinglesProduct;
+/** COVID-19 vaccines — distinct product IDs from RSV/Shingrix. */
+export const COVID_PRODUCT_IDS = [
+  "CovidSpikevax",
+  "CovidMNEXSPIKE",
+  "CovidNUVAXOVID",
+] as const;
+export type CovidProduct = (typeof COVID_PRODUCT_IDS)[number];
 
-export type CoverageOutcome = "covered" | "not_covered" | "conditional";
+/** HPV — Gardasil / Cervarix */
+export const HPV_PRODUCT_IDS = ["HpvGardasil", "HpvCervarix"] as const;
+export type HpvProduct = (typeof HPV_PRODUCT_IDS)[number];
+
+export type VaccineProduct = RsvProduct | ShinglesProduct | CovidProduct | HpvProduct;
+
+export function isCovidProduct(p: VaccineProduct): p is CovidProduct {
+  return (COVID_PRODUCT_IDS as readonly string[]).includes(p);
+}
+
+export function isHpvProduct(p: VaccineProduct): p is HpvProduct {
+  return (HPV_PRODUCT_IDS as readonly string[]).includes(p);
+}
+
+export type CoverageOutcome =
+  | "covered"
+  | "not_covered"
+  | "conditional"
+  /** Program rules unavailable from configured sources for this jurisdiction/product */
+  | "no_data";
 
 export type Confidence = "high" | "medium" | "low";
 
