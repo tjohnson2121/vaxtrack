@@ -1,8 +1,8 @@
 import type { CoverageResult } from "./types";
 
 /**
- * Provincial program rules are not modeled for this jurisdiction/product.
- * Deliberately omits gap/recommendation fields so the UI does not imply coverage guidance.
+ * Used when no provincial program rules or dedicated source are modeled for this
+ * jurisdiction + vaccine (see evaluate.ts RSV branches, evaluate-shingles NB/NT/NU).
  */
 export function noEncodedProvincialProgramResult(args: {
   jurisdictionDisplayName: string;
@@ -13,11 +13,8 @@ export function noEncodedProvincialProgramResult(args: {
     outcome: "no_data",
     confidence: "low",
     rationale: [
-      `Confirm ${args.productLabel} eligibility and public funding in ${args.jurisdictionDisplayName} using the linked provincial or territorial immunization source.`,
+      `No linked provincial program source or eligibility summary for ${args.productLabel} in ${args.jurisdictionDisplayName} (e.g. Yukon · Beyfortus has no source).`,
     ],
     primarySourceUrl: args.primarySourceUrl,
-    missingInformation: [
-      `Confirm eligibility using current ${args.jurisdictionDisplayName} immunization or pharmacy program sources.`,
-    ],
   };
 }

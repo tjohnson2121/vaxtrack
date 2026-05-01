@@ -680,13 +680,9 @@ export function CoverageCheckForm() {
               )}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-                  Provincial program data
+                  Result
                 </p>
-                <p className="mt-1 text-2xl font-bold">Not available in tool</p>
-                <p className="mt-2 text-sm leading-relaxed opacity-90">
-                  Follow the rationale below and use the linked sources to confirm eligibility for
-                  this province or territory and vaccine.
-                </p>
+                <p className="mt-1 text-2xl font-bold">No recommendation available</p>
               </div>
               <ul className="list-inside list-disc space-y-1 text-sm">
                 {result.rationale.map((r, i) => (
