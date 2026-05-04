@@ -8,7 +8,7 @@ export default function Home() {
           VaxTrack
         </h1>
         <p className="mt-3 text-base text-zinc-600 dark:text-zinc-400">
-          RSV program alignment — Ontario, Quebec, and Nova Scotia.
+          Decision support for vaccine coverage across Canadian provinces and territories.
         </p>
         <div className="mt-10">
           <Link
@@ -18,11 +18,6 @@ export default function Home() {
             Coverage check
           </Link>
         </div>
-        <p className="mt-8 text-xs leading-relaxed text-zinc-500">
-          Decision support only. Confirm eligibility against current provincial
-          programs, product monographs, and payer policy before clinical or
-          billing decisions.
-        </p>
       </main>
     </div>
   );
