@@ -250,22 +250,24 @@ function evaluateManitobaShingles(input: CoverageInput): CoverageResult {
 }
 
 // ─── Newfoundland & Labrador ──────────────────────────────────────────────────
+// Source: NL Health August 2025 press release — all adults 50+ covered as of September 1, 2025
+// June 2025 release: 65+ covered and immunocompromised 50–64 covered from June 1, 2025
 
 function evaluateNLShingles(input: CoverageInput): CoverageResult {
-  const { ageYears, considerNaci } = input;
+  const { ageYears } = input;
 
   if (ageYears < 50) return under50NotEligible(SOURCES.nlShingles);
+
+  // Universal 50+ as of September 1, 2025 (NL August 2025 press release)
   return shinglesResult({
-    outcome: "conditional",
-    confidence: "low",
+    outcome: "covered",
+    confidence: "high",
     rationale: [
-      "Newfoundland & Labrador expanded its immunization programs in 2025 — verify current Shingrix eligibility at the provincial health release linked.",
+      "Newfoundland & Labrador expanded publicly funded Shingrix to all adults 50 years and older as of September 1, 2025. Immunocompromised adults 50–64 were also covered beginning June 1, 2025.",
     ],
     primarySourceUrl: SOURCES.nlShingles,
-    supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles],
-    missingInformation: ["Confirm current NL Shingrix program eligibility and age threshold"],
+    supportingSourceUrls: [SOURCES.nlShinglesJune2025, SOURCES.hcShingrix, SOURCES.naciShingles],
     naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    coverageGap: "Adults 50+ are HC-approved and NACI Grade A for Shingrix; NL program details require verification.",
   });
 }
 
@@ -288,33 +290,43 @@ function evaluatePEIShingles(input: CoverageInput): CoverageResult {
 }
 
 // ─── Saskatchewan ─────────────────────────────────────────────────────────────
+// SK funds Shingrix for adults 65 years and older.
+// No dedicated provincial Shingrix page was found; use SK immunization services + CIG as references.
 
 function evaluateSKShingles(input: CoverageInput): CoverageResult {
-  const { ageYears, considerNaci } = input;
+  const { ageYears, conditionIds, considerNaci } = input;
 
-  if (ageYears < 50) return under50NotEligible(SOURCES.skShingles);
-  if (ageYears >= 65) {
+  if (ageYears < 50 && !has(conditionIds, "immunocompromised_shingles")) {
+    return under50NotEligible(SOURCES.skShingles);
+  }
+  if (has(conditionIds, "immunocompromised_shingles") && ageYears >= 18 && ageYears < 65) {
     return shinglesResult({
       outcome: "conditional",
-      confidence: "low",
+      confidence: "medium",
       rationale: [
-        "Saskatchewan Shingrix program details should be confirmed at the provincial source — full eligibility criteria for the current season require verification.",
+        "Saskatchewan's Shingrix program primarily covers adults 65+. For immunocompromised adults under 65, confirm current SK eligibility with Saskatchewan Health Authority — NACI strongly recommends (Grade A) Shingrix for immunocompromised adults 18+.",
       ],
       primarySourceUrl: SOURCES.skShingles,
-      supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles],
-      missingInformation: ["Confirm current Saskatchewan Shingrix program eligibility"],
+      supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles, SOURCES.cigShingles],
+      missingInformation: ["Confirm Saskatchewan currently funds Shingrix for immunocompromised adults under 65"],
+      naciVsHcGap: HC_VS_NACI_GAP_IMMUNOCOMPROMISED,
+      coverageGap: "HC and NACI Grade A support Shingrix for immunocompromised adults 18+, but SK public funding for under-65 immunocompromised adults requires confirmation.",
+    });
+  }
+  if (ageYears >= 65) {
+    return shinglesResult({
+      outcome: "covered",
+      confidence: "medium",
+      rationale: [
+        "Saskatchewan publicly funds Shingrix (2-dose series) for adults 65 years and older — confirm current criteria at the Saskatchewan immunization services page.",
+      ],
+      primarySourceUrl: SOURCES.skShingles,
+      supportingSourceUrls: [SOURCES.hcShingrix, SOURCES.naciShingles, SOURCES.cigShingles],
       naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
     });
   }
-  return shinglesResult({
-    outcome: "not_covered",
-    confidence: "low",
-    rationale: ["Saskatchewan Shingrix details require verification; patient may be outside the typical public program age band."],
-    primarySourceUrl: SOURCES.skShingles,
-    missingInformation: ["Verify Saskatchewan Shingrix program at the linked source"],
-    naciVsHcGap: HC_VS_NACI_GAP_50PLUS,
-    coverageGap: "Adults 50–64 are HC-approved and NACI Grade A for Shingrix; SK public funding requires verification.",
-  });
+  // 50–64, immunocompetent
+  return notFundedResult("Saskatchewan", SOURCES.skShingles, ageYears, 65, HC_VS_NACI_GAP_50PLUS, considerNaci);
 }
 
 // ─── Territories ─────────────────────────────────────────────────────────────

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   isCovidProduct,
+  isHpvProduct,
+  type BiologicalSex,
   type ConditionId,
   type Confidence,
   type Jurisdiction,
@@ -11,6 +13,60 @@ import {
 } from "@/lib/coverage/types";
 import type { CoverageResult } from "@/lib/coverage/types";
 import { SOURCES } from "@/lib/coverage/sources";
+
+function urlLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function SourcesBlock({ primary, supporting }: { primary: string; supporting?: string[] }) {
+  const [open, setOpen] = useState(false);
+  const count = supporting?.length ?? 0;
+  return (
+    <div className="space-y-2">
+      <div className="text-sm">
+        <span className="font-semibold text-zinc-700 dark:text-zinc-300">Primary source </span>
+        <a
+          href={primary}
+          target="_blank"
+          rel="noreferrer"
+          className="text-teal-700 underline hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-200"
+        >
+          {urlLabel(primary)}
+        </a>
+      </div>
+      {count > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="text-xs text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            {open ? "▾" : "▸"} {count} supporting reference{count !== 1 ? "s" : ""}
+          </button>
+          {open && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {supporting!.map((u) => (
+                <a
+                  key={u}
+                  href={u}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  {urlLabel(u)}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function GapCard({ gap }: { gap: string }) {
   return (
@@ -173,6 +229,10 @@ const CONDITIONS: { id: ConditionId; label: string }[] = [
     id: "immunocompromised_shingles",
     label: "Immunocompromising condition (Shingrix 18+ pathway)",
   },
+  {
+    id: "msm_gbmsm",
+    label: "Gay, bisexual, or other men who have sex with men (MSM/GBMSM)",
+  },
 ];
 
 // Province + product combinations that have relevant eligibility conditions
@@ -182,24 +242,61 @@ const PROVINCE_CONDITIONS: Partial<Record<Jurisdiction, Partial<Record<VaccinePr
     Arexvy: ["lct_retirement_resident", "alc_hospital", "gn_immunocompromised", "dialysis", "transplant", "homeless", "indigenous"],
     Abrysvo: ["lct_retirement_resident", "alc_hospital", "gn_immunocompromised", "dialysis", "transplant", "homeless", "indigenous"],
     Shingrix: ["immunocompromised_shingles"],
+    HpvGardasil: ["msm_gbmsm"],
+    HpvCervarix: ["msm_gbmsm"],
   },
   QC: {
     Beyfortus: [],
     Arexvy: ["transplant", "dialysis"],
     Abrysvo: ["transplant", "dialysis"],
     Shingrix: [],
+    HpvGardasil: ["gn_immunocompromised", "dialysis", "transplant", "msm_gbmsm"],
+    HpvCervarix: ["msm_gbmsm"],
   },
   NS: {
     Beyfortus: [],
     Arexvy: ["lct_retirement_resident", "alc_hospital"],
     Abrysvo: ["lct_retirement_resident", "alc_hospital"],
     Shingrix: [],
+    HpvGardasil: ["msm_gbmsm"],
+    HpvCervarix: ["msm_gbmsm"],
+  },
+  AB: {
+    Beyfortus: [],
+    // 60–69: LTC/supportive living resident OR Indigenous
+    Arexvy: ["lct_retirement_resident", "indigenous"],
+    Abrysvo: ["lct_retirement_resident", "indigenous"],
+    Shingrix: ["immunocompromised_shingles"],
+  },
+  BC: {
+    Beyfortus: [],
+    // 60–74: LTC/residential care setting unlocks covered result vs conditional
+    Arexvy: ["lct_retirement_resident"],
+    Abrysvo: ["lct_retirement_resident"],
+    Shingrix: [],
   },
   MB: {
     Shingrix: ["immunocompromised_shingles"],
-    Arexvy: [],
-    Abrysvo: [],
+    // Adults 60+ in personal care homes
+    Arexvy: ["lct_retirement_resident"],
+    Abrysvo: ["lct_retirement_resident"],
     Beyfortus: [],
+  },
+  NB: {
+    Beyfortus: [],
+    // 60–74: LTC resident OR Indigenous
+    Arexvy: ["lct_retirement_resident", "indigenous"],
+    Abrysvo: ["lct_retirement_resident", "indigenous"],
+    Shingrix: [],
+    HpvGardasil: ["msm_gbmsm", "gn_immunocompromised", "transplant"],
+    HpvCervarix: ["msm_gbmsm"],
+  },
+  NL: {
+    Beyfortus: [],
+    // 60+: congregate living/LTC required
+    Arexvy: ["lct_retirement_resident"],
+    Abrysvo: ["lct_retirement_resident"],
+    Shingrix: [],
   },
 };
 
@@ -236,12 +333,12 @@ export function CoverageCheckForm() {
   const [pedDiscussed, setPedDiscussed] = useState(false);
   const [eligibilityFactor, setEligibilityFactor] = useState<"" | ConditionId>("");
 
+  const [biologicalSex, setBiologicalSex] = useState<BiologicalSex | "">("");
   const [result, setResult] = useState<CoverageResult | null>(null);
   const [resultSource, setResultSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [showNaci, setShowNaci] = useState(false);
-  const [considerNaci, setConsiderNaci] = useState(false);
 
   const conditionIds: ConditionId[] = eligibilityFactor ? [eligibilityFactor] : [];
 
@@ -269,13 +366,21 @@ export function CoverageCheckForm() {
     };
   }, [ageYears, ageMonths, gestationalWeeks]);
 
-  /** Matches backend: HPV encoded; COVID encoded; RSV encoded for ON/QC/NS; Shingrix encoded except NB/NT/NU. */
+  /**
+   * Matches backend:
+   * - HPV: all jurisdictions encoded
+   * - COVID: all jurisdictions encoded
+   * - RSV: ON/QC/NS/AB/BC/MB/NB/NL/PE encoded; SK/NT/NU/YT use no_data
+   * - Shingrix: all except NB/NT/NU encoded
+   */
   const provincialRulesNotEncoded = useMemo(() => {
     if (isCovidProduct(product)) return false;
     if (product === "Shingrix") {
       return jurisdiction === "NB" || jurisdiction === "NT" || jurisdiction === "NU";
     }
-    return jurisdiction !== "ON" && jurisdiction !== "QC" && jurisdiction !== "NS";
+    // RSV products — list jurisdictions with no encoded rules
+    const rsvNoData: Jurisdiction[] = ["SK", "NT", "NU", "YT"];
+    return rsvNoData.includes(jurisdiction);
   }, [product, jurisdiction]);
 
   const resetForm = () => {
@@ -290,11 +395,11 @@ export function CoverageCheckForm() {
     setPrevPublic(false);
     setPedDiscussed(false);
     setEligibilityFactor("");
+    setBiologicalSex("");
     setResult(null);
     setResultSource(null);
     setError(null);
     setShowNaci(false);
-    setConsiderNaci(false);
   };
 
   const loadVaccinesWithPublishedRules = useCallback(async () => {
@@ -353,7 +458,7 @@ export function CoverageCheckForm() {
       previouslyReceivedPublicAdultRsv: prevPublic,
       pediatricSpecialistDiscussed: pedDiscussed,
       conditionIds,
-      considerNaci,
+      biologicalSex: biologicalSex || undefined,
     };
 
     setChecking(true);
@@ -405,18 +510,7 @@ export function CoverageCheckForm() {
         onSubmit={submit}
         className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
       >
-        {vaccinesWithRules.length === 0 ? (
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300">
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">
-              Built-in rules
-            </p>
-            <p className="mt-1 text-xs leading-relaxed">
-              When published program rules are available, they appear in the
-              vaccine program selector. Until then, this form uses the built-in
-              rules for the provinces below.
-            </p>
-          </div>
-        ) : (
+        {vaccinesWithRules.length > 0 && (
           <label className="flex flex-col gap-1 text-sm font-medium">
             Vaccine program (optional)
             <select
@@ -481,11 +575,6 @@ export function CoverageCheckForm() {
           </label>
         </div>
 
-        {provincialRulesNotEncoded && (
-          <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
-            Verify eligibility using official program sources linked in the result.
-          </p>
-        )}
 
         <div
           className={`grid gap-4 ${product === "Beyfortus" || (isCovidProduct(product) && ageYears.trim() !== "" && parsed.ageYears === 0) ? "sm:grid-cols-2" : ""}`}
@@ -531,6 +620,24 @@ export function CoverageCheckForm() {
           )}
         </div>
 
+        {isHpvProduct(product) && (
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            Biological sex (optional)
+            <select
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              value={biologicalSex}
+              onChange={(e) => setBiologicalSex(e.target.value as BiologicalSex | "")}
+            >
+              <option value="">Not specified</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+            </select>
+            <span className="text-xs font-normal text-zinc-500">
+              Used only where provincial HPV program eligibility differs by sex.
+            </span>
+          </label>
+        )}
+
         {product === "Abrysvo" && (
           <div className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <label className="flex items-center gap-2 text-sm font-medium">
@@ -569,7 +676,8 @@ export function CoverageCheckForm() {
           </div>
         )}
 
-        {jurisdiction === "ON" && (product === "Arexvy" || (product === "Abrysvo" && !pregnant)) && (
+        {(["ON", "AB", "BC", "MB", "NB"] as Jurisdiction[]).includes(jurisdiction) &&
+          (product === "Arexvy" || (product === "Abrysvo" && !pregnant)) && (
           <div className="space-y-1">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -580,7 +688,7 @@ export function CoverageCheckForm() {
               Patient has already received a publicly funded adult RSV vaccine
             </label>
             <p className="ml-6 text-xs text-zinc-500">
-              Ontario&apos;s adult RSV program funds a single dose; a prior publicly funded dose makes the patient ineligible for repeat public funding.
+              This province&apos;s adult RSV program funds a single lifetime dose — a prior publicly funded dose makes the patient ineligible for repeat public funding.
             </p>
           </div>
         )}
@@ -596,38 +704,6 @@ export function CoverageCheckForm() {
           </label>
         )}
 
-        {!isCovidProduct(product) && (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Gap gate</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Show gap where province doesn't fund…</p>
-            </div>
-            <div className="flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
-              <button
-                type="button"
-                onClick={() => setConsiderNaci(false)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  !considerNaci
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                }`}
-              >
-                HC monograph
-              </button>
-              <button
-                type="button"
-                onClick={() => setConsiderNaci(true)}
-                className={`border-l border-zinc-300 px-3 py-1.5 text-xs font-medium transition-colors dark:border-zinc-700 ${
-                  considerNaci
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                }`}
-              >
-                NACI Grade A
-              </button>
-            </div>
-          </div>
-        )}
 
         {filteredConditions.length > 0 && (
           <label className="flex flex-col gap-1 text-sm font-medium">
@@ -699,17 +775,7 @@ export function CoverageCheckForm() {
                   </ul>
                 </div>
               )}
-              <div className="text-sm">
-                <span className="font-semibold">Starting reference: </span>
-                <a
-                  href={result.primarySourceUrl}
-                  className="break-all underline"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {result.primarySourceUrl}
-                </a>
-              </div>
+              <SourcesBlock primary={result.primarySourceUrl} />
               <div className="border-t border-black/10 pt-3">
                 <button
                   type="button"
@@ -736,7 +802,7 @@ export function CoverageCheckForm() {
                   className={`flex flex-col space-y-3 rounded-lg border p-4 ${outcomeStyles[result.outcome] ?? outcomeStyles.conditional}`}
                 >
                   <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-                    Coverage check
+                    Public coverage
                   </p>
                   <p className="text-2xl font-bold capitalize">
                     {result.outcome.replace("_", " ")}
@@ -771,41 +837,17 @@ export function CoverageCheckForm() {
                   {result.naciVsHcGap ? (
                     <NaciVsHcGapCard gap={result.naciVsHcGap} />
                   ) : (
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                      No structured HC vs NACI comparison for this path.
-                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">No HC vs NACI gap identified for this vaccine.</p>
                   )}
-                  {result.coverageGap ? <GapCard gap={result.coverageGap} /> : null}
+                  {result.coverageGap && <GapCard gap={result.coverageGap} />}
                 </div>
               </div>
 
               <div className="mt-6 space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-                <div className="text-sm text-zinc-800 dark:text-zinc-200">
-                  <span className="font-semibold">Primary source: </span>
-                  <a
-                    href={result.primarySourceUrl}
-                    className="break-all underline"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {result.primarySourceUrl}
-                  </a>
-                </div>
-
-                {result.supportingSourceUrls && result.supportingSourceUrls.length > 0 && (
-                  <div className="text-sm text-zinc-800 dark:text-zinc-200">
-                    <p className="font-semibold">Supporting references</p>
-                    <ul className="mt-1 list-inside list-disc">
-                      {result.supportingSourceUrls.map((u) => (
-                        <li key={u}>
-                          <a href={u} className="break-all underline" target="_blank" rel="noreferrer">
-                            {u}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <SourcesBlock
+                  primary={result.primarySourceUrl}
+                  supporting={result.supportingSourceUrls}
+                />
 
                 <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
                   <button

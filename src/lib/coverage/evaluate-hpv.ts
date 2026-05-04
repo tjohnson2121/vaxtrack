@@ -1,8 +1,9 @@
 /**
  * HPV eligibility logic derived from official provincial/territorial pages (April 2026 snapshot:
  * Ontario.ca, HealthLink BC, NS Health, NB gnb.ca, MSSS Québec PIQ, Sask Cancer Agency,
- * NWT HSS, Alberta MyHealth Alberta, NL partnership summary). MB / PE / NU rely on PDFs —
- * rationale directs users to the linked provincial documents.
+ * NWT HSS, Alberta MyHealth Alberta, NL partnership summary).
+ * MB / PE have no encoded rules — returns no_data.
+ * NU: encoded from GN public-service announcement (Aug 2013) — Grade 6 girls; verify expansion.
  */
 
 import type {
@@ -13,6 +14,7 @@ import type {
   Jurisdiction,
 } from "./types";
 import { SOURCES } from "./sources";
+import { noEncodedProvincialProgramResult } from "./no-encoded-result";
 
 const HPV_MONOGRAPH: Record<HpvProduct, string> = {
   HpvGardasil: SOURCES.hcHpvGardasil,
@@ -91,10 +93,18 @@ function supportingRefs(product: HpvProduct): string[] {
   ]);
 }
 
-function qcImmunocompromisedForHpv(c: ConditionId[]): boolean {
+function isMsm(c: ConditionId[]): boolean {
+  return c.includes("msm_gbmsm");
+}
+
+function isImmunocompromised(c: ConditionId[]): boolean {
   return c.some((x) =>
     ["gn_immunocompromised", "dialysis", "transplant"].includes(x)
   );
+}
+
+function qcImmunocompromisedForHpv(c: ConditionId[]): boolean {
+  return isImmunocompromised(c);
 }
 
 function underNineNotFunded(
@@ -211,16 +221,27 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
         });
       }
       if (age >= 19 && age <= 26) {
+        if (isMsm(cond)) {
+          return result({
+            outcome: "covered",
+            confidence: "high",
+            rationale: [
+              "Ontario publicly funds HPV vaccine for gay or bisexual males (GBMSM) up to 26 years of age.",
+            ],
+            primarySourceUrl: SOURCES.onHpv,
+            supportingSourceUrls: support,
+          });
+        }
         return result({
-          outcome: "conditional",
+          outcome: "not_covered",
           confidence: "medium",
           rationale: [
-            "Ontario notes gay or bisexual males up to 26 years of age may receive publicly funded HPV vaccine; others past secondary school usually pay privately unless another program criterion applies.",
+            "Ontario funds HPV vaccine for grades 7–12 cohorts and GBMSM up to age 26. This patient is past secondary school and the GBMSM criterion was not indicated.",
           ],
           primarySourceUrl: SOURCES.onHpv,
           supportingSourceUrls: support,
           missingInformation: [
-            "Confirm Ontario eligibility for this patient (e.g. GBMSM pathway vs private purchase)",
+            "If patient is gay, bisexual, or MSM, select that criterion to confirm publicly funded eligibility",
           ],
         });
       }
@@ -321,17 +342,58 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
           supportingSourceUrls: support,
         });
       }
-      if (age <= 45) {
+      // Adults 19–45: NS funds Two-Spirit, transgender, and MSM — male sex is required
+      // for the documented priority-population pathway; females outside the under-19
+      // cohort are not described as a funded adult group.
+      if (age <= 45 && input.biologicalSex === "male") {
+        if (isMsm(cond)) {
+          return result({
+            outcome: "covered",
+            confidence: "high",
+            rationale: [
+              "Nova Scotia Health publicly funds HPV vaccine for Two-Spirit, transgender people, and men who have sex with men until age 46.",
+            ],
+            primarySourceUrl: SOURCES.nsHpv,
+            supportingSourceUrls: support,
+          });
+        }
         return result({
           outcome: "conditional",
           confidence: "medium",
           rationale: [
-            "Nova Scotia Health notes Two-Spirit, transgender people and men who have sex with men may receive free vaccine until age 46; others in this age band may need private purchase.",
+            "Nova Scotia Health notes Two-Spirit, transgender people, and men who have sex with men may receive free HPV vaccine until age 46.",
           ],
           primarySourceUrl: SOURCES.nsHpv,
           supportingSourceUrls: support,
           missingInformation: [
-            "Confirm eligibility under NS priority-population criteria vs private pay",
+            "Confirm patient meets NS priority-population criteria (Two-Spirit, transgender, or MSM pathway)",
+          ],
+        });
+      }
+      if (age <= 45 && input.biologicalSex === "female") {
+        return result({
+          outcome: "not_covered",
+          confidence: "medium",
+          rationale: [
+            "Nova Scotia publicly funds HPV vaccine for youth under 19; the adult priority-population pathway (up to age 46) is described for Two-Spirit, transgender, and MSM individuals.",
+          ],
+          primarySourceUrl: SOURCES.nsHpv,
+          supportingSourceUrls: support,
+          declineReason: "Outside Nova Scotia's publicly funded HPV cohorts for adult females",
+        });
+      }
+      if (age <= 45) {
+        // Sex not provided — flag both possibilities
+        return result({
+          outcome: "conditional",
+          confidence: "low",
+          rationale: [
+            "Nova Scotia publicly funds HPV vaccine for youth under 19 and for Two-Spirit, transgender, and MSM individuals up to age 46. Adult eligibility depends on sex and identity criteria.",
+          ],
+          primarySourceUrl: SOURCES.nsHpv,
+          supportingSourceUrls: support,
+          missingInformation: [
+            "Provide patient sex and confirm NS priority-population eligibility (Two-Spirit, transgender, or MSM)",
           ],
         });
       }
@@ -348,21 +410,67 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
     }
 
     case "NB": {
+      const birthYear = new Date().getFullYear() - age;
       if (age >= 9 && age <= 26) {
+        if (input.biologicalSex === "female") {
+          return result({
+            outcome: "covered",
+            confidence: "high",
+            rationale: [
+              "New Brunswick (gnb.ca) lists publicly funded HPV vaccine for females aged 9–26.",
+            ],
+            primarySourceUrl: SOURCES.nbHpv,
+            supportingSourceUrls: support,
+          });
+        }
+        if (input.biologicalSex === "male") {
+          if (birthYear >= 2005) {
+            return result({
+              outcome: "covered",
+              confidence: "high",
+              rationale: [
+                "New Brunswick lists publicly funded HPV vaccine for males aged 9–26 born on or after 2005.",
+              ],
+              primarySourceUrl: SOURCES.nbHpv,
+              supportingSourceUrls: support,
+            });
+          }
+          // Male born before 2005 — may still qualify via GBMSM or immunocompromised pathway
+          return result({
+            outcome: "conditional",
+            confidence: "medium",
+            rationale: [
+              `New Brunswick's routine male HPV program covers those born on or after 2005 (estimated birth year for this patient: ${birthYear}). GBMSM or immunocompromised pathways may still apply.`,
+            ],
+            primarySourceUrl: SOURCES.nbHpv,
+            supportingSourceUrls: support,
+            missingInformation: ["Confirm GBMSM or immunocompromised eligibility for males born before 2005"],
+          });
+        }
+        // Sex not provided
         return result({
           outcome: "covered",
           confidence: "medium",
           rationale: [
-            "New Brunswick (gnb.ca) lists publicly funded HPV vaccine for females aged 9–26 and males aged 9–26 born on or after 2005, with further pathways for priority adults — male eligibility depends on birth year and stated risk cohorts.",
+            "New Brunswick lists publicly funded HPV vaccine for females 9–26 and males 9–26 born on or after 2005. Confirm sex and birth year to determine eligibility.",
           ],
           primarySourceUrl: SOURCES.nbHpv,
           supportingSourceUrls: support,
-          missingInformation: [
-            "Confirm male birth year (on or after 2005) and whether GBMSM or immunocompromised expanded eligibility applies",
-          ],
+          missingInformation: ["Provide patient sex to confirm NB eligibility (male birth year restriction applies)"],
         });
       }
       if (age >= 18 && age <= 45) {
+        if (isMsm(cond) || isImmunocompromised(cond)) {
+          return result({
+            outcome: "covered",
+            confidence: "high",
+            rationale: [
+              "New Brunswick publicly funds HPV vaccine for GBMSM and immunocompromised adults (including HIV) up to age 45.",
+            ],
+            primarySourceUrl: SOURCES.nbHpv,
+            supportingSourceUrls: support,
+          });
+        }
         return result({
           outcome: "conditional",
           confidence: "medium",
@@ -371,7 +479,7 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
           ],
           primarySourceUrl: SOURCES.nbHpv,
           supportingSourceUrls: support,
-          missingInformation: ["Confirm GBMSM or immunocompromised pathway documentation"],
+          missingInformation: ["Confirm GBMSM or immunocompromised pathway using the eligibility criterion field"],
         });
       }
       return result({
@@ -413,6 +521,17 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
         });
       }
       if (age >= 21 && age <= 26) {
+        if (isMsm(cond)) {
+          return result({
+            outcome: "covered",
+            confidence: "high",
+            rationale: [
+              "Québec MSSS PIQ lists HARSAH (MSM/gay/bisexual men) as a publicly funded Gardasil 9 cohort up to age 26.",
+            ],
+            primarySourceUrl: SOURCES.qcHpv,
+            supportingSourceUrls: support,
+          });
+        }
         return result({
           outcome: "conditional",
           confidence: "medium",
@@ -421,7 +540,7 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
           ],
           primarySourceUrl: SOURCES.qcHpv,
           supportingSourceUrls: support,
-          missingInformation: ["Confirm HARSAH or immunocompromised/HIV eligibility"],
+          missingInformation: ["Confirm HARSAH (MSM) or immunocompromised/HIV eligibility"],
         });
       }
       if (age >= 21 && age <= 45) {
@@ -475,19 +594,50 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
 
     case "MB":
     case "PE":
-    case "NU":
-      return result({
-        outcome: "conditional",
-        confidence: "low",
-        rationale: [
-          `Confirm funded HPV age cohorts, product, and catch-up rules for ${place} using the linked provincial immunization resource (fact sheet or program manual).`,
-        ],
+      return noEncodedProvincialProgramResult({
+        jurisdictionDisplayName: place,
+        productLabel: "HPV vaccine (Gardasil)",
         primarySourceUrl: provUrl,
-        supportingSourceUrls: support,
-        missingInformation: [
-          `Verify HPV program eligibility on the official ${place} immunization resource`,
-        ],
       });
+
+    case "NU": {
+      // Source: Government of Nunavut public-service announcement, Aug 2013
+      // (gov.nu.ca) — Grade 6 girls offered HPV vaccine free in schools.
+      // Grade 6 ≈ age 11–12. Program may have expanded since; verify with local health centre.
+      if (age >= 9 && age <= 18 && input.biologicalSex === "female") {
+        return result({
+          outcome: "conditional",
+          confidence: "low",
+          rationale: [
+            "A 2013 Government of Nunavut announcement describes HPV vaccine offered free to Grade 6 girls (approximately age 11–12) in schools across the territory. Program scope and any catch-up eligibility should be confirmed with the local health centre, as the document predates recent national expansions.",
+          ],
+          primarySourceUrl: provUrl,
+          supportingSourceUrls: support,
+          missingInformation: [
+            "Confirm current Nunavut HPV program eligibility (grade and catch-up age range) with the local health centre",
+          ],
+        });
+      }
+      if (age >= 9 && age <= 18 && !input.biologicalSex) {
+        return result({
+          outcome: "conditional",
+          confidence: "low",
+          rationale: [
+            "A 2013 Government of Nunavut announcement describes HPV vaccine offered free to Grade 6 girls. Whether coverage has since expanded to all sexes is not confirmed — verify with the local health centre.",
+          ],
+          primarySourceUrl: provUrl,
+          supportingSourceUrls: support,
+          missingInformation: [
+            "Provide patient sex and confirm current Nunavut HPV program eligibility with the local health centre",
+          ],
+        });
+      }
+      return noEncodedProvincialProgramResult({
+        jurisdictionDisplayName: "Nunavut",
+        productLabel: "HPV vaccine (Gardasil)",
+        primarySourceUrl: provUrl,
+      });
+    }
 
     case "YT":
       return result({
@@ -502,14 +652,10 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
       });
 
     default:
-      return result({
-        outcome: "conditional",
-        confidence: "low",
-        rationale: [
-          "Confirm HPV eligibility using the linked provincial or territorial immunization source.",
-        ],
+      return noEncodedProvincialProgramResult({
+        jurisdictionDisplayName: place,
+        productLabel: "HPV vaccine (Gardasil)",
         primarySourceUrl: provUrl,
-        supportingSourceUrls: support,
       });
   }
 }

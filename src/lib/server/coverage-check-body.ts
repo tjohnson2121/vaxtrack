@@ -26,6 +26,7 @@ export const coverageCheckBodyZ = z
     previouslyReceivedPublicAdultRsv: z.boolean().optional(),
     pediatricSpecialistDiscussed: z.boolean().optional(),
     conditionIds: z.array(conditionIdZ).default([]),
+    biologicalSex: z.enum(["male", "female"]).optional(),
     considerNaci: z.boolean().optional(),
   })
   .strict();

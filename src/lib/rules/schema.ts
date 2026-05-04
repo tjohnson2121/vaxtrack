@@ -10,6 +10,7 @@ export const conditionIdZ = z.enum([
   "homeless",
   "indigenous",
   "immunocompromised_shingles",
+  "msm_gbmsm",
 ]);
 
 export const whenClauseZ = z

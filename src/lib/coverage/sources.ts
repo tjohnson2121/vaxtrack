@@ -64,11 +64,15 @@ export const SOURCES = {
     "https://www.gov.mb.ca/health/publichealth/diseases/shingles.html",
   nbShingles:
     "https://www2.gnb.ca/content/gnb/en/departments/health/patientinformation/PrimaryHealthCare/pharmacy_services/shingles.html",
+  /** NL August 2025: all adults 50+ covered as of September 1, 2025 */
   nlShingles: "https://www.gov.nl.ca/releases/2025/health/0829n04/",
+  /** NL June 2025: initial announcement — 65+ and immunocompromised 50–64 */
+  nlShinglesJune2025: "https://www.gov.nl.ca/releases/2025/health/0602n07/",
   peShingles:
     "https://www.princeedwardisland.ca/en/news/free-shingles-vaccine-program-expanded-to-include-islanders-50-and-over",
+  /** Saskatchewan government immunization services page (no dedicated shingles page found; verify SK-specific criteria here). */
   skShingles:
-    "https://novascotia.ca/dhw/cdpc/documents/shingles-immunization-information-healthcare-professionals.pdf",
+    "https://www.saskatchewan.ca/residents/health/accessing-health-care-services/immunization-services",
   ytShingles: "https://yukonimmunization.ca/diseases-and-vaccines/shingles",
 
   // COVID-19 — Health Canada product monographs (DPD PDF)

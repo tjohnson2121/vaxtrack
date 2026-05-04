@@ -57,7 +57,8 @@ export type ConditionId =
   | "transplant"
   | "homeless"
   | "indigenous"
-  | "immunocompromised_shingles";
+  | "immunocompromised_shingles"
+  | "msm_gbmsm";
 
 /**
  * Structured comparison of Health Canada's approved indication vs NACI
@@ -74,11 +75,15 @@ export interface NaciVsHcGap {
   gapDetail?: string;
 }
 
+/** Biological sex — relevant for sex-specific HPV program eligibility in some provinces. */
+export type BiologicalSex = "male" | "female";
+
 export interface CoverageInput {
   jurisdiction: Jurisdiction;
   product: VaccineProduct;
   ageYears: number;
   ageMonths?: number;
+  biologicalSex?: BiologicalSex;
   pregnant?: boolean;
   gestationalWeeks?: number;
   deliverDuringRsvSeason?: boolean;

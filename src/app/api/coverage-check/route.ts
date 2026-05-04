@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     previouslyReceivedPublicAdultRsv: b.previouslyReceivedPublicAdultRsv,
     pediatricSpecialistDiscussed: b.pediatricSpecialistDiscussed,
     conditionIds: b.conditionIds,
+    biologicalSex: b.biologicalSex,
     considerNaci: b.considerNaci,
   };
 

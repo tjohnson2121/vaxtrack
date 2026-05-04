@@ -13,7 +13,7 @@ export function noEncodedProvincialProgramResult(args: {
     outcome: "no_data",
     confidence: "low",
     rationale: [
-      `No linked provincial program source or eligibility summary for ${args.productLabel} in ${args.jurisdictionDisplayName} (e.g. Yukon · Beyfortus has no source).`,
+      `No provincial program eligibility criteria are encoded for ${args.productLabel} in ${args.jurisdictionDisplayName}. Use the primary source link to review current program eligibility.`,
     ],
     primarySourceUrl: args.primarySourceUrl,
   };

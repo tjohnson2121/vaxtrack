@@ -349,6 +349,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
       "Unable to classify this Ontario RSV scenario with current inputs.",
     ],
     primarySourceUrl: SOURCES.onPrograms,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
@@ -584,72 +585,646 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
     ],
     primarySourceUrl: SOURCES.qcPiq,
     missingInformation: ["Review full Québec PIQ indication list for this patient"],
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
 // ─── Alberta ──────────────────────────────────────────────────────────────────
+// Source: Alberta Pharmacy Association — RSV Immunization Program Eligibility Expansion (March 10, 2025)
+// Adults 70+ community; adults 60–69 in LTC/supportive living or First Nations/Métis/Inuit
 
 function evaluateAlberta(input: CoverageInput): CoverageResult {
-  void input;
-  return noEncodedProvincialProgramResult({
-    jurisdictionDisplayName: "Alberta",
-    productLabel: "RSV vaccines",
+  const {
+    product,
+    ageYears,
+    pregnant,
+    conditionIds,
+    previouslyReceivedPublicAdultRsv,
+  } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "Alberta publicly funds nirsevimab (Beyfortus) for eligible infants. Enter age in years and months to check against the under-24-month window.",
+        ],
+        missingInformation: ["Infant age in years and months"],
+        primarySourceUrl: SOURCES.abRsv,
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: ["Alberta's infant RSV (nirsevimab/Beyfortus) program covers eligible children under 24 months."],
+        primarySourceUrl: SOURCES.abRsv,
+        declineReason: "Age not met — infant program requires under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Child is under 24 months. Confirm eligibility for Alberta's publicly funded nirsevimab program with Alberta Health Services.",
+      ],
+      primarySourceUrl: SOURCES.abRsv,
+      missingInformation: ["Confirm the infant meets Alberta's high-risk or program eligibility criteria with AHS"],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  if (product === "Abrysvo" && pregnant) {
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Confirm whether Alberta publicly funds maternal Abrysvo (RSV vaccination in pregnancy) and at what gestational age window with Alberta Health Services.",
+      ],
+      primarySourceUrl: SOURCES.abRsv,
+      supportingSourceUrls: [SOURCES.hcAbrysvo],
+      missingInformation: ["Confirm Alberta maternal Abrysvo program eligibility and gestational age window"],
+      naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
+    });
+  }
+
+  if (product === "Arexvy" || product === "Abrysvo") {
+    if (previouslyReceivedPublicAdultRsv) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "Alberta's adult RSV immunization program is a single-dose, one-time program — a prior publicly funded RSV dose makes the patient ineligible for repeat public funding.",
+        ],
+        primarySourceUrl: SOURCES.abRsv,
+        declineReason: "Previously received a publicly funded adult RSV dose — one-dose limit applies",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    if (ageYears >= 70) {
+      return result({
+        outcome: "covered",
+        confidence: "high",
+        rationale: [
+          "Alberta's RSV program (expanded March 2025) funds community-dwelling adults 70 years and older who have not previously received a publicly funded RSV vaccine.",
+        ],
+        primarySourceUrl: SOURCES.abRsv,
+        supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
+        naciNote: "NACI strongly recommends RSV vaccination for all adults 75+ (Grade A); discretionarily recommends for adults 60–74 (Grade B).",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    if (ageYears >= 60) {
+      if (has(conditionIds, "lct_retirement_resident") || has(conditionIds, "indigenous")) {
+        return result({
+          outcome: "covered",
+          confidence: "high",
+          rationale: [
+            "Alberta funds RSV vaccine for adults aged 60–69 who reside in long-term care or supportive living settings, and for First Nations, Métis, or Inuit adults 60 years and older.",
+          ],
+          primarySourceUrl: SOURCES.abRsv,
+          supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
+          naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
+          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        });
+      }
+      return result({
+        outcome: "not_covered",
+        confidence: "medium",
+        rationale: [
+          "Alberta's adult RSV program covers community-dwelling adults 70+, adults 60–69 in LTC/supportive living, and First Nations/Métis/Inuit adults 60+. This patient does not appear to meet those criteria.",
+        ],
+        missingInformation: ["Confirm LTC/supportive living residency or Indigenous status for 60–69 eligibility"],
+        primarySourceUrl: SOURCES.abRsv,
+        declineReason: "Age 60–69 without qualifying criterion — Alberta requires 70+, LTC residency, or Indigenous status for this band",
+        naciNote: "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        coverageGap:
+          input.considerNaci === true
+            ? undefined
+            : "Adults 60–69 in the community are HC-approved for RSV but Alberta does not publicly fund this group without LTC or Indigenous pathway.",
+      });
+    }
+    return result({
+      outcome: "not_covered",
+      confidence: "medium",
+      rationale: [
+        "Patient is outside Alberta's funded adult RSV age bands (60+ with LTC/Indigenous criteria, or 70+ community-dwelling).",
+      ],
+      primarySourceUrl: SOURCES.abRsv,
+      declineReason: "Outside eligible age range — Alberta adult RSV program requires 70+ (community) or 60+ with LTC/Indigenous criterion",
+    });
+  }
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: ["Unable to classify this Alberta RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.abRsv,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
 // ─── British Columbia ─────────────────────────────────────────────────────────
+// Source: HealthLinkBC — RSV vaccine file
+// Adults 75+ (priority); adults 60–74 in residential/facility settings; high-risk infants; single dose
 
 function evaluateBC(input: CoverageInput): CoverageResult {
-  void input;
-  return noEncodedProvincialProgramResult({
-    jurisdictionDisplayName: "British Columbia",
-    productLabel: "RSV vaccines",
+  const {
+    product,
+    ageYears,
+    pregnant,
+    conditionIds,
+    previouslyReceivedPublicAdultRsv,
+  } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "BC publicly funds nirsevimab (Beyfortus) for high-risk infants. Enter age in years and months to check against the under-24-month window.",
+        ],
+        missingInformation: ["Infant age in years and months"],
+        primarySourceUrl: SOURCES.bcRsv,
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: ["BC's infant RSV monoclonal program covers eligible children under 24 months."],
+        primarySourceUrl: SOURCES.bcRsv,
+        declineReason: "Age not met — infant program requires under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Child is under 24 months. HealthLinkBC describes nirsevimab as funded for high-risk infants — confirm current BC eligibility criteria with BCCDC or your local public health unit.",
+      ],
+      primarySourceUrl: SOURCES.bcRsv,
+      missingInformation: ["Confirm the infant meets BC's high-risk criteria for publicly funded nirsevimab (Beyfortus)"],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  if (product === "Abrysvo" && pregnant) {
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Confirm current BC program criteria for maternal Abrysvo (RSV vaccination in pregnancy) with HealthLinkBC or BCCDC — gestational age window and program availability should be verified.",
+      ],
+      primarySourceUrl: SOURCES.bcRsv,
+      supportingSourceUrls: [SOURCES.hcAbrysvo],
+      missingInformation: ["Confirm BC maternal Abrysvo public program eligibility and gestational age window with BCCDC"],
+      naciVsHcGap: RSV_NACI_VS_HC_PREGNANT,
+    });
+  }
+
+  if (product === "Arexvy" || product === "Abrysvo") {
+    if (previouslyReceivedPublicAdultRsv) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "BC's adult RSV vaccine program is a single dose — a prior publicly funded RSV dose makes the patient ineligible for repeat public funding.",
+        ],
+        primarySourceUrl: SOURCES.bcRsv,
+        declineReason: "Previously received a publicly funded adult RSV dose — one-dose limit applies",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    if (ageYears >= 75) {
+      return result({
+        outcome: "covered",
+        confidence: "high",
+        rationale: [
+          "HealthLinkBC identifies adults 75 years and older as a priority group for publicly funded RSV vaccination in British Columbia.",
+        ],
+        primarySourceUrl: SOURCES.bcRsv,
+        supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
+        naciNote: "NACI strongly recommends RSV vaccination for all adults 75+ (Grade A).",
+        naciVsHcGap: RSV_NACI_VS_HC_75PLUS,
+      });
+    }
+    if (ageYears >= 60 && ageYears <= 74) {
+      if (has(conditionIds, "lct_retirement_resident")) {
+        return result({
+          outcome: "covered",
+          confidence: "high",
+          rationale: [
+            "HealthLinkBC describes adults 60–74 in residential care/facility settings as eligible for publicly funded RSV vaccination in BC.",
+          ],
+          primarySourceUrl: SOURCES.bcRsv,
+          supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
+          naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
+          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        });
+      }
+      return result({
+        outcome: "conditional",
+        confidence: "medium",
+        rationale: [
+          "HealthLinkBC notes community-dwelling adults 60–74 should consult their provider about RSV vaccine eligibility — public program criteria for this group are not uniformly stated on the page; confirm current eligibility at the HealthLinkBC link.",
+        ],
+        primarySourceUrl: SOURCES.bcRsv,
+        missingInformation: ["Confirm current BC eligibility criteria for community-dwelling adults 60–74 at HealthLinkBC or with a health provider"],
+        naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+      });
+    }
+    return result({
+      outcome: "not_covered",
+      confidence: "medium",
+      rationale: [
+        "Patient appears outside BC's funded adult RSV age bands (75+ priority, or 60–74 in residential care settings).",
+      ],
+      primarySourceUrl: SOURCES.bcRsv,
+      declineReason: "Outside eligible age range — BC adult RSV program covers adults 60+ (criteria apply for 60–74)",
+    });
+  }
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: ["Unable to classify this British Columbia RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.bcRsv,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
 // ─── Manitoba ─────────────────────────────────────────────────────────────────
+// Source: Manitoba Health — Vaccine Eligibility page (gov.mb.ca)
+// Adults 60+ in personal care homes (PCH); all infants first RSV season from April 2026; single dose
 
 function evaluateManitoba(input: CoverageInput): CoverageResult {
-  void input;
-  return noEncodedProvincialProgramResult({
-    jurisdictionDisplayName: "Manitoba",
-    productLabel: "RSV vaccines",
+  const {
+    product,
+    ageYears,
+    conditionIds,
+    previouslyReceivedPublicAdultRsv,
+  } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "Manitoba publicly funds RSV antibody product (nirsevimab/Beyfortus) for all infants in their first RSV season (Oct–Mar), starting April 2026, and for high-risk children entering a second season. Enter age in years and months to check the under-24-month window.",
+        ],
+        missingInformation: ["Infant age in years and months"],
+        primarySourceUrl: SOURCES.mbRsv,
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: ["Manitoba's infant RSV monoclonal program covers eligible children under 24 months."],
+        primarySourceUrl: SOURCES.mbRsv,
+        declineReason: "Age not met — infant program requires under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Child is under 24 months. Manitoba funds nirsevimab for all infants in their first RSV season (October–March) starting April 2026, and for high-risk children in the second season — confirm current program timing and criteria with Manitoba Health.",
+      ],
+      primarySourceUrl: SOURCES.mbRsv,
+      missingInformation: ["Confirm current Manitoba infant nirsevimab program timing and eligibility criteria"],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  if (product === "Arexvy" || product === "Abrysvo") {
+    if (previouslyReceivedPublicAdultRsv) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "Manitoba's adult RSV program is a single-dose program — a prior publicly funded RSV dose makes the patient ineligible.",
+        ],
+        primarySourceUrl: SOURCES.mbRsv,
+        declineReason: "Previously received a publicly funded adult RSV dose — one-dose limit applies",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    if (ageYears >= 60 && has(conditionIds, "lct_retirement_resident")) {
+      return result({
+        outcome: "covered",
+        confidence: "high",
+        rationale: [
+          "Manitoba publicly funds RSV vaccine for adults 60 years and older residing in personal care homes (PCH) and similar residential care settings who have not previously received a publicly funded RSV dose.",
+        ],
+        primarySourceUrl: SOURCES.mbRsv,
+        supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
+        naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    return result({
+      outcome: "not_covered",
+      confidence: "medium",
+      rationale: [
+        "Manitoba's publicly funded adult RSV program is currently restricted to adults 60+ who are residents of personal care homes — community-dwelling adults are not covered under the current program.",
+      ],
+      missingInformation: [
+        "Confirm personal care home / residential care residency status for 60+ eligibility",
+        "Check Manitoba Health page for any expansions beyond PCH residents",
+      ],
+      primarySourceUrl: SOURCES.mbRsv,
+      declineReason: "Manitoba adult RSV public program is restricted to personal care home residents 60+ (no community-dwelling program encoded)",
+      naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
+      naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+    });
+  }
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: ["Unable to classify this Manitoba RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.mbRsv,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
 // ─── New Brunswick ────────────────────────────────────────────────────────────
+// Source: GNB — NB Prescription Drug Program public health plan (rsv-vaccine)
+// Adults 75+ community; First Nations/Métis/Inuit 60+; LTC residents 60+; not an annual vaccine
 
 function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
-  void input;
-  return noEncodedProvincialProgramResult({
-    jurisdictionDisplayName: "New Brunswick",
-    productLabel: "RSV vaccines",
+  const {
+    product,
+    ageYears,
+    conditionIds,
+    previouslyReceivedPublicAdultRsv,
+  } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "New Brunswick's publicly funded infant RSV program eligibility requires age verification. Enter age in years and months.",
+        ],
+        missingInformation: ["Infant age in years and months"],
+        primarySourceUrl: SOURCES.nbRsv,
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: ["NB's infant RSV program covers eligible infants under 24 months."],
+        primarySourceUrl: SOURCES.nbRsv,
+        declineReason: "Age not met — infant program requires under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Child is under 24 months. Confirm New Brunswick infant nirsevimab (Beyfortus) eligibility criteria with the NB Prescription Drug Program.",
+      ],
+      primarySourceUrl: SOURCES.nbRsv,
+      missingInformation: ["Confirm NB infant nirsevimab eligibility with the provincial drug program"],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  if (product === "Arexvy" || product === "Abrysvo") {
+    if (previouslyReceivedPublicAdultRsv) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: [
+          "New Brunswick's RSV program is a one-time (not annual) vaccine — previously vaccinated individuals are not eligible for repeat public funding.",
+        ],
+        primarySourceUrl: SOURCES.nbRsv,
+        declineReason: "Previously received a publicly funded adult RSV dose — NB program is not an annual vaccine",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    if (ageYears >= 75) {
+      return result({
+        outcome: "covered",
+        confidence: "high",
+        rationale: [
+          "New Brunswick's public RSV program covers community-dwelling adults 75 years and older who have not previously received a publicly funded RSV vaccine.",
+        ],
+        primarySourceUrl: SOURCES.nbRsv,
+        supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
+        naciNote: "NACI strongly recommends RSV vaccination for all adults 75+ (Grade A).",
+        naciVsHcGap: RSV_NACI_VS_HC_75PLUS,
+      });
+    }
+    if (ageYears >= 60) {
+      if (has(conditionIds, "lct_retirement_resident") || has(conditionIds, "indigenous")) {
+        return result({
+          outcome: "covered",
+          confidence: "high",
+          rationale: [
+            "New Brunswick funds RSV vaccine for adults 60 years and older who reside in long-term care settings, and for First Nations, Métis, or Inuit adults aged 60 and older.",
+          ],
+          primarySourceUrl: SOURCES.nbRsv,
+          supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
+          naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
+          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        });
+      }
+      return result({
+        outcome: "not_covered",
+        confidence: "medium",
+        rationale: [
+          "New Brunswick funds RSV vaccine for: community-dwelling adults 75+, adults 60+ in long-term care, and First Nations/Métis/Inuit adults 60+. This patient does not appear to meet those criteria.",
+        ],
+        missingInformation: ["Confirm LTC residency or Indigenous status for 60–74 eligibility"],
+        primarySourceUrl: SOURCES.nbRsv,
+        declineReason: "Age 60–74 without LTC or Indigenous pathway — NB program requires 75+, LTC, or Indigenous status for this band",
+        naciNote: "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        coverageGap:
+          input.considerNaci === true
+            ? undefined
+            : "Adults 60–74 in the community are HC-approved for RSV but NB does not publicly fund without LTC or Indigenous criterion.",
+      });
+    }
+    return result({
+      outcome: "not_covered",
+      confidence: "medium",
+      rationale: [
+        "Patient is outside New Brunswick's funded adult RSV age bands (75+ community, or 60+ in LTC/Indigenous pathway).",
+      ],
+      primarySourceUrl: SOURCES.nbRsv,
+      declineReason: "Outside eligible age range for NB adult RSV program",
+    });
+  }
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: ["Unable to classify this New Brunswick RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.nbRsv,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
 // ─── Newfoundland & Labrador ──────────────────────────────────────────────────
+// Source: NL Health press release March 28, 2025 — RSV vaccine expansion
+// Adults 60+ in congregate living facilities; community-dwelling adults not yet covered
 
 function evaluateNL(input: CoverageInput): CoverageResult {
-  void input;
-  return noEncodedProvincialProgramResult({
-    jurisdictionDisplayName: "Newfoundland & Labrador",
-    productLabel: "RSV vaccines",
+  const { product, ageYears, conditionIds } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM === "unknown") {
+      return result({
+        outcome: "conditional",
+        confidence: "low",
+        rationale: [
+          "Confirm NL infant nirsevimab (Beyfortus) program eligibility with NL Health Services — enter age in years and months.",
+        ],
+        missingInformation: ["Infant age in years and months; confirm NL infant nirsevimab eligibility"],
+        primarySourceUrl: SOURCES.nlRsv,
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    if (totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: ["Infant RSV monoclonal programs cover eligible children under 24 months."],
+        primarySourceUrl: SOURCES.nlRsv,
+        declineReason: "Age not met — infant program requires under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "Child is under 24 months. Confirm NL infant nirsevimab (Beyfortus) eligibility and program criteria with NL Health Services.",
+      ],
+      primarySourceUrl: SOURCES.nlRsv,
+      missingInformation: ["Confirm NL infant nirsevimab program eligibility and criteria with NL Health Services"],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  if (product === "Arexvy" || product === "Abrysvo") {
+    if (ageYears >= 60 && has(conditionIds, "lct_retirement_resident")) {
+      return result({
+        outcome: "covered",
+        confidence: "medium",
+        rationale: [
+          "NL Health's March 2025 RSV expansion covers adults 60 years and older residing in congregate living facilities (long-term care, personal care homes, and similar settings).",
+        ],
+        primarySourceUrl: SOURCES.nlRsv,
+        supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
+        naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
+        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      });
+    }
+    return result({
+      outcome: "not_covered",
+      confidence: "medium",
+      rationale: [
+        "NL's public RSV program (March 2025) covers adults 60+ in congregate living facilities — community-dwelling adults are not covered under this program. Check the press release for any subsequent expansions.",
+      ],
+      missingInformation: [
+        "Confirm congregate living/LTC residency status for eligibility",
+        "Check for NL program expansions after March 2025",
+      ],
+      primarySourceUrl: SOURCES.nlRsv,
+      declineReason: "NL adult RSV program requires 60+ in congregate/LTC care — community-dwelling adults not covered",
+      naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
+      naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+    });
+  }
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: ["Unable to classify this Newfoundland & Labrador RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.nlRsv,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 
 // ─── PEI ─────────────────────────────────────────────────────────────────────
+// Source: PEI news release August 19, 2025 — RSV protection expanded for infants and seniors
 
 function evaluatePEI(input: CoverageInput): CoverageResult {
-  void input;
-  return noEncodedProvincialProgramResult({
-    jurisdictionDisplayName: "Prince Edward Island",
-    productLabel: "RSV vaccines",
+  const { product } = input;
+
+  if (product === "Beyfortus") {
+    const totalM = totalAgeMonthsForBeyfortus(input);
+    if (totalM !== "unknown" && totalM > BEYFORTUS_MAX_AGE_MONTHS) {
+      return result({
+        outcome: "not_covered",
+        confidence: "high",
+        rationale: ["PEI's infant RSV program covers eligible children under 24 months."],
+        primarySourceUrl: SOURCES.peRsv,
+        declineReason: "Age not met — infant program requires under 24 months",
+        naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+      });
+    }
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "PEI expanded its publicly funded RSV program in August 2025 to include infants — confirm current nirsevimab (Beyfortus) eligibility criteria with Health PEI.",
+      ],
+      primarySourceUrl: SOURCES.peRsv,
+      missingInformation: ["Confirm PEI infant nirsevimab (Beyfortus) eligibility criteria with Health PEI"],
+      naciVsHcGap: RSV_NACI_VS_HC_BEYFORTUS,
+    });
+  }
+
+  if (product === "Arexvy" || product === "Abrysvo") {
+    return result({
+      outcome: "conditional",
+      confidence: "medium",
+      rationale: [
+        "PEI expanded its publicly funded RSV program in August 2025 to include seniors — confirm current age threshold and eligibility criteria with Health PEI.",
+      ],
+      primarySourceUrl: SOURCES.peRsv,
+      supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
+      missingInformation: ["Confirm PEI adult RSV program age threshold and eligibility criteria with Health PEI"],
+      naciVsHcGap: RSV_NACI_VS_HC_75PLUS,
+    });
+  }
+
+  return result({
+    outcome: "conditional",
+    confidence: "low",
+    rationale: [
+      "PEI expanded its publicly funded RSV program in August 2025. Confirm eligibility for this product with Health PEI.",
+    ],
     primarySourceUrl: SOURCES.peRsv,
+    missingInformation: ["Confirm eligibility at Health PEI for the current RSV program"],
+    naciVsHcGap: RSV_NACI_VS_HC_60_74,
   });
 }
 

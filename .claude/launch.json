@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "Next.js Dev",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--webpack"],
+      "name": "VaxTrack Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
     },
     {
