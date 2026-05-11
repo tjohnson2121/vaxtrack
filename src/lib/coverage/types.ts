@@ -64,11 +64,16 @@ export type ConditionId =
  * Structured comparison of Health Canada's approved indication vs NACI
  * recommendation strength. Drives the visual gap card in the UI.
  */
+/** NACI recommendation strength grade. From the NACI Process Manual. */
+export type NaciGradeLetter = "A" | "B" | "C" | "D" | "E" | "I";
+
 export interface NaciVsHcGap {
   /** Short label for what Health Canada has approved */
   hcIndication: string;
   /** Short label for the NACI grade and scope */
   naciGrade: string;
+  /** Structured NACI grade letter (A–I) used for the recommendation scale UI. */
+  naciGradeLetter?: NaciGradeLetter;
   /** Whether HC and NACI are fully aligned, partially aligned, or divergent */
   alignment: "full" | "partial" | "gap";
   /** One-line plain-language explanation when not fully aligned */

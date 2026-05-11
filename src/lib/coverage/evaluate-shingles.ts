@@ -8,12 +8,14 @@ const NACI_SHINGLES_NOTE =
 const HC_VS_NACI_GAP_50PLUS: NaciVsHcGap = {
   hcIndication: "Adults 50+ (2-dose series)",
   naciGrade: "Grade A · Adults 50+",
+  naciGradeLetter: "A",
   alignment: "full",
 };
 
 const HC_VS_NACI_GAP_IMMUNOCOMPROMISED: NaciVsHcGap = {
   hcIndication: "Immunocompromised adults 18+ (2-dose series)",
   naciGrade: "Grade A · Immunocompromised adults 18+ (2025)",
+  naciGradeLetter: "A",
   alignment: "full",
 };
 
@@ -77,6 +79,7 @@ function under50NotEligible(sourceUrl: string): CoverageResult {
     naciVsHcGap: {
       hcIndication: "Adults 50+ (2-dose series)",
       naciGrade: "Grade A · Adults 50+",
+      naciGradeLetter: "A",
       alignment: "gap",
       gapDetail: "Under 50 without immunocompromise — outside both HC indication and NACI Grade A",
     },

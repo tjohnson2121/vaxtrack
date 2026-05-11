@@ -6,8 +6,8 @@ import {
   isHpvProduct,
   type BiologicalSex,
   type ConditionId,
-  type Confidence,
   type Jurisdiction,
+  type NaciGradeLetter,
   type NaciVsHcGap,
   type VaccineProduct,
 } from "@/lib/coverage/types";
@@ -22,9 +22,36 @@ function urlLabel(url: string): string {
   }
 }
 
+/**
+ * Produce a unique display label for each URL in a list. When two URLs share the
+ * same hostname (e.g. multiple PDFs on pdf.hres.ca), append a short tail from the
+ * path so each chip is distinguishable.
+ */
+function labelInContext(url: string, allUrls: string[]): string {
+  const base = urlLabel(url);
+  const sameDomain = allUrls.filter((u) => urlLabel(u) === base);
+  if (sameDomain.length <= 1) return base;
+  try {
+    const parsed = new URL(url);
+    const segs = parsed.pathname.split("/").filter(Boolean);
+    const last = segs[segs.length - 1] ?? "";
+    const cleanLast = last.replace(/\.(pdf|html?|aspx?)$/i, "");
+    if (!cleanLast) return base;
+    const truncated = cleanLast.length > 20 ? `${cleanLast.slice(0, 17)}…` : cleanLast;
+    return `${base}/${truncated}`;
+  } catch {
+    return base;
+  }
+}
+
 function SourcesBlock({ primary, supporting }: { primary: string; supporting?: string[] }) {
   const [open, setOpen] = useState(false);
-  const count = supporting?.length ?? 0;
+  // Drop any supporting URL that exactly matches the primary, and dedupe.
+  const supportingDeduped = useMemo(
+    () => Array.from(new Set((supporting ?? []).filter((u) => u !== primary))),
+    [supporting, primary]
+  );
+  const count = supportingDeduped.length;
   return (
     <div className="space-y-2">
       <div className="text-sm">
@@ -49,7 +76,7 @@ function SourcesBlock({ primary, supporting }: { primary: string; supporting?: s
           </button>
           {open && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {supporting!.map((u) => (
+              {supportingDeduped.map((u) => (
                 <a
                   key={u}
                   href={u}
@@ -57,7 +84,7 @@ function SourcesBlock({ primary, supporting }: { primary: string; supporting?: s
                   rel="noreferrer"
                   className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 >
-                  {urlLabel(u)}
+                  {labelInContext(u, supportingDeduped)}
                 </a>
               ))}
             </div>
@@ -80,43 +107,83 @@ function GapCard({ gap }: { gap: string }) {
   );
 }
 
-function ConfidenceBar({ level }: { level: Confidence }) {
-  const label = level === "high" ? "High" : level === "medium" ? "Medium" : "Low";
-  const markerPosition =
-    level === "low" ? "0%" : level === "medium" ? "50%" : "100%";
-  const markerTransform =
-    level === "low"
-      ? "translateX(0)"
-      : level === "medium"
-        ? "translateX(-50%)"
-        : "translateX(-100%)";
+const NACI_GRADE_META: Record<NaciGradeLetter, { label: string; tooltip: string; active: string }> = {
+  A: {
+    label: "Strong recommendation FOR",
+    tooltip: "Good evidence to recommend immunization",
+    active: "bg-emerald-600 text-white border-emerald-700",
+  },
+  B: {
+    label: "Discretionary recommendation FOR",
+    tooltip: "Fair evidence to recommend immunization",
+    active: "bg-lime-500 text-zinc-900 border-lime-600",
+  },
+  C: {
+    label: "No recommendation",
+    tooltip: "Conflicting evidence — no clear recommendation for or against",
+    active: "bg-amber-500 text-zinc-900 border-amber-600",
+  },
+  D: {
+    label: "Discretionary recommendation AGAINST",
+    tooltip: "Fair evidence to recommend against immunization",
+    active: "bg-orange-500 text-white border-orange-600",
+  },
+  E: {
+    label: "Strong recommendation AGAINST",
+    tooltip: "Good evidence to recommend against immunization",
+    active: "bg-rose-600 text-white border-rose-700",
+  },
+  I: {
+    label: "Insufficient evidence",
+    tooltip: "Insufficient evidence to make a recommendation",
+    active: "bg-zinc-500 text-white border-zinc-600",
+  },
+};
 
+const NACI_GRADE_ORDER: NaciGradeLetter[] = ["A", "B", "C", "D", "E", "I"];
+
+function NaciGradeBar({ grade }: { grade?: NaciGradeLetter }) {
+  const meta = grade ? NACI_GRADE_META[grade] : null;
   return (
     <div
       className="rounded-lg border border-zinc-200 bg-zinc-50/90 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900/50"
       role="status"
-      aria-label={`Rule confidence: ${label}`}
+      aria-label={meta ? `NACI recommendation: Grade ${grade} — ${meta.label}` : "NACI recommendation grade not encoded"}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Confidence
+          NACI recommendation
         </span>
-        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{label}</span>
+        {meta ? (
+          <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+            Grade {grade} · {meta.label}
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Not encoded</span>
+        )}
       </div>
-      <div className="relative mt-2 h-2.5">
-        <div
-          className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-200 dark:bg-zinc-700"
-          aria-hidden
-        />
-        <div
-          className="absolute top-1/2 z-10 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-teal-600 shadow-sm dark:border-zinc-900"
-          style={{ left: markerPosition, transform: markerTransform }}
-          aria-hidden
-        />
+      <div className="mt-2.5 flex items-stretch gap-1">
+        {NACI_GRADE_ORDER.map((g) => {
+          const isActive = g === grade;
+          const cellMeta = NACI_GRADE_META[g];
+          return (
+            <div
+              key={g}
+              title={`Grade ${g} — ${cellMeta.tooltip}`}
+              className={`flex flex-1 items-center justify-center rounded border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                isActive
+                  ? cellMeta.active
+                  : "border-zinc-200 bg-white text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-600"
+              }`}
+            >
+              {g}
+            </div>
+          );
+        })}
       </div>
-      <div className="mt-1 flex justify-between text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        <span>Low</span>
-        <span>High</span>
+      <div className="mt-1.5 flex justify-between text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <span>For</span>
+        <span>Against</span>
       </div>
     </div>
   );
@@ -841,6 +908,8 @@ export function CoverageCheckForm() {
                   )}
                   {result.coverageGap && <GapCard gap={result.coverageGap} />}
                 </div>
+
+                <NaciGradeBar grade={result.naciVsHcGap?.naciGradeLetter} />
               </div>
 
               <div className="mt-6 space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
@@ -898,7 +967,6 @@ export function CoverageCheckForm() {
               </div>
 
               <div className="mt-4 space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-                <ConfidenceBar level={result.confidence} />
                 {result.missingInformation && result.missingInformation.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase text-zinc-500">

@@ -20,12 +20,14 @@ const ON_PHARMACY_CONTEXT =
 const RSV_NACI_VS_HC_75PLUS: NaciVsHcGap = {
   hcIndication: "Adults 60+ (single dose)",
   naciGrade: "Grade A · Adults 75+",
+  naciGradeLetter: "A",
   alignment: "full",
 };
 
 const RSV_NACI_VS_HC_60_74: NaciVsHcGap = {
   hcIndication: "Adults 60+ (single dose)",
   naciGrade: "Grade B · Adults 60–74 (discretionary)",
+  naciGradeLetter: "B",
   alignment: "partial",
   gapDetail: "Ages 60–74 are HC-approved but only NACI Grade B — not a strong-gap candidate under a NACI Grade A funding gate",
 };
@@ -33,6 +35,7 @@ const RSV_NACI_VS_HC_60_74: NaciVsHcGap = {
 const RSV_NACI_VS_HC_PREGNANT: NaciVsHcGap = {
   hcIndication: "Pregnant individuals 24–36 weeks gestation (Abrysvo)",
   naciGrade: "Grade A · Pregnant 28–36 weeks (RSV season)",
+  naciGradeLetter: "A",
   alignment: "partial",
   gapDetail: "24–27 weeks: HC-approved but outside the NACI Grade A window",
 };
@@ -40,6 +43,7 @@ const RSV_NACI_VS_HC_PREGNANT: NaciVsHcGap = {
 const RSV_NACI_VS_HC_BEYFORTUS: NaciVsHcGap = {
   hcIndication: "Neonates/infants (first season); high-risk children under 24 months",
   naciGrade: "Grade A · All infants (first RSV season)",
+  naciGradeLetter: "A",
   alignment: "full",
 };
 
