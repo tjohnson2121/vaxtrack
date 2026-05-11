@@ -1,0 +1,10 @@
+{
+  "sourceKey": "abCovid",
+  "url": "https://www.ab.bluecross.ca/news/covid-19-updates.php",
+  "finalUrl": "https://www.ab.bluecross.ca/error/error-404ex.html",
+  "fetchedAt": "2026-05-11T19:58:04.761Z",
+  "contentHash": "sha256:0b4a0027afd058e9592fcf94f68b10d7fe760fcc3bea51c77adb1f21d44c0d56",
+  "contentType": "html",
+  "httpStatus": 200,
+  "text": "We are sorry, we cannot locate that page\nHere are some helpful links\n\nHome\nHelp me choose a plan\nOnline services \nContact us"
+}
