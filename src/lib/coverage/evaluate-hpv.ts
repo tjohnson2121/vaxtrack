@@ -12,9 +12,93 @@ import type {
   CoverageResult,
   HpvProduct,
   Jurisdiction,
+  NaciVsHcGap,
 } from "./types";
 import { SOURCES } from "./sources";
 import { noEncodedProvincialProgramResult } from "./no-encoded-result";
+
+// ─── HC-vs-NACI gap objects (HPV) ───────────────────────────────────────────
+// Source: NACI Updated Recommendations on Human Papillomavirus Vaccines
+// (July 24, 2024). Strong for 9–26; discretionary for 27+; strong for
+// immunocompromised any age (3-dose series).
+
+/**
+ * NACI Strong recommendation: HPV vaccination for individuals 9–20 years
+ * (1-dose schedule; 2-dose on individual basis).
+ */
+const HPV_NACI_9_TO_20: NaciVsHcGap = {
+  hcIndication: "Individuals 9–45 years (Gardasil 9)",
+  naciGrade: "Grade A · Ages 9–20 (1 dose, strong)",
+  naciGradeLetter: "A",
+  alignment: "full",
+};
+
+/**
+ * NACI Strong recommendation: HPV vaccination for individuals 21–26 years
+ * (2-dose schedule, 24 weeks apart).
+ */
+const HPV_NACI_21_TO_26: NaciVsHcGap = {
+  hcIndication: "Individuals 9–45 years (Gardasil 9)",
+  naciGrade: "Grade A · Ages 21–26 (2 doses, strong)",
+  naciGradeLetter: "A",
+  alignment: "full",
+};
+
+/**
+ * NACI Discretionary recommendation: HPV vaccination for individuals 27+
+ * (2-dose schedule; shared clinical decision-making).
+ */
+const HPV_NACI_27_PLUS: NaciVsHcGap = {
+  hcIndication: "Individuals 9–45 years (Gardasil 9)",
+  naciGrade: "Grade B · Ages 27+ (2 doses, discretionary)",
+  naciGradeLetter: "B",
+  alignment: "partial",
+  gapDetail: "HC approves Gardasil 9 through age 45 but NACI recommendation is discretionary (shared decision-making) for ages 27+",
+};
+
+/**
+ * NACI Strong recommendation: immunocompromised individuals of any age
+ * should receive 3 doses of HPV vaccine.
+ */
+const HPV_NACI_IMMUNOCOMPROMISED: NaciVsHcGap = {
+  hcIndication: "Individuals 9–45 years (Gardasil 9)",
+  naciGrade: "Grade A · Immunocompromised (3 doses, strong)",
+  naciGradeLetter: "A",
+  alignment: "full",
+};
+
+/** Under 9: outside HC indication. */
+const HPV_NACI_UNDER_9: NaciVsHcGap = {
+  hcIndication: "Individuals 9–45 years (Gardasil 9)",
+  naciGrade: "N/A · Under 9 (outside indication)",
+  alignment: "gap",
+  gapDetail: "Under 9 years — outside both HC indication and NACI recommendation",
+};
+
+/** Pick the appropriate NACI gap based on patient profile. */
+function hpvNaciGap(input: CoverageInput): NaciVsHcGap {
+  const { ageYears, conditionIds } = input;
+  if (ageYears < 9) return HPV_NACI_UNDER_9;
+  if (isImmunocompromised(conditionIds)) return HPV_NACI_IMMUNOCOMPROMISED;
+  if (ageYears <= 20) return HPV_NACI_9_TO_20;
+  if (ageYears <= 26) return HPV_NACI_21_TO_26;
+  return HPV_NACI_27_PLUS;
+}
+
+function hpvNaciNote(input: CoverageInput): string {
+  const { ageYears, conditionIds } = input;
+  if (ageYears < 9) return "HPV vaccination begins at age 9 per both HC indication and NACI recommendation.";
+  if (isImmunocompromised(conditionIds)) {
+    return "NACI strongly recommends a 3-dose HPV vaccine schedule for immunocompromised individuals regardless of age.";
+  }
+  if (ageYears <= 20) {
+    return "NACI strongly recommends HPV vaccination for individuals 9–20 years (1-dose schedule; 2 doses may be considered on individual basis).";
+  }
+  if (ageYears <= 26) {
+    return "NACI strongly recommends HPV vaccination for individuals 21–26 years (2-dose schedule, doses 24 weeks apart).";
+  }
+  return "NACI recommends (discretionary) that individuals 27 years and older may receive HPV vaccine through shared clinical decision-making (2-dose schedule).";
+}
 
 const HPV_MONOGRAPH: Record<HpvProduct, string> = {
   HpvGardasil: SOURCES.hcHpvGardasil,
@@ -110,7 +194,8 @@ function qcImmunocompromisedForHpv(c: ConditionId[]): boolean {
 function underNineNotFunded(
   age: number,
   provUrl: string,
-  product: HpvProduct
+  product: HpvProduct,
+  input: CoverageInput,
 ): CoverageResult | null {
   if (age >= 9) return null;
   return result({
@@ -122,6 +207,8 @@ function underNineNotFunded(
     primarySourceUrl: provUrl,
     supportingSourceUrls: supportingRefs(product),
     declineReason: "Under 9 years — outside typical publicly funded HPV program age range",
+    naciVsHcGap: HPV_NACI_UNDER_9,
+    naciNote: hpvNaciNote(input),
   });
 }
 
@@ -129,6 +216,8 @@ function evaluateCervarix(input: CoverageInput): CoverageResult {
   const j = input.jurisdiction;
   const provUrl = HPV_PROVINCIAL[j];
   const support = supportingRefs("HpvCervarix");
+  const gap = hpvNaciGap(input);
+  const note = hpvNaciNote(input);
 
   if (j === "QC") {
     return result({
@@ -141,6 +230,8 @@ function evaluateCervarix(input: CoverageInput): CoverageResult {
       supportingSourceUrls: support,
       declineReason:
         "Québec's publicly funded routine HPV school program uses Gardasil 9, not Cervarix",
+      naciVsHcGap: gap,
+      naciNote: note,
     });
   }
 
@@ -155,6 +246,8 @@ function evaluateCervarix(input: CoverageInput): CoverageResult {
     missingInformation: [
       "Confirm whether Cervarix is publicly funded for this patient (many programs use Gardasil 9 only)",
     ],
+    naciVsHcGap: gap,
+    naciNote: note,
   });
 }
 
@@ -165,8 +258,10 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
   const place = JURISDICTION_LABEL[j];
   const cond = input.conditionIds;
   const support = supportingRefs("HpvGardasil");
+  const gap = hpvNaciGap(input);
+  const note = hpvNaciNote(input);
 
-  const early = underNineNotFunded(age, provUrl, "HpvGardasil");
+  const early = underNineNotFunded(age, provUrl, "HpvGardasil", input);
   if (early) return early;
 
   switch (j) {
@@ -180,8 +275,6 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
           ],
           primarySourceUrl: SOURCES.bcHpv,
           supportingSourceUrls: support,
-          naciNote:
-            "NACI recommendations on HPV vaccines are summarized in the linked PHAC PDF and HTML documents.",
         });
       }
       return result({
@@ -662,8 +755,16 @@ function evaluateGardasil(input: CoverageInput): CoverageResult {
 
 export function evaluateHpv(input: CoverageInput): CoverageResult {
   const product = input.product as HpvProduct;
-  if (product === "HpvCervarix") {
-    return evaluateCervarix(input);
-  }
-  return evaluateGardasil(input);
+  const raw = product === "HpvCervarix"
+    ? evaluateCervarix(input)
+    : evaluateGardasil(input);
+
+  // Ensure every HPV result carries the NACI gap/note. Individual branches
+  // may already set these (e.g. Cervarix, under-9); the fallback fills any
+  // that were missed without overwriting explicit values.
+  return {
+    ...raw,
+    naciVsHcGap: raw.naciVsHcGap ?? hpvNaciGap(input),
+    naciNote: raw.naciNote ?? hpvNaciNote(input),
+  };
 }

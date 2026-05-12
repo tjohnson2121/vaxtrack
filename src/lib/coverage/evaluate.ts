@@ -24,12 +24,29 @@ const RSV_NACI_VS_HC_75PLUS: NaciVsHcGap = {
   alignment: "full",
 };
 
-const RSV_NACI_VS_HC_60_74: NaciVsHcGap = {
+/**
+ * NACI Grade A for adults 65–74 who are at increased risk of severe RSV disease.
+ * Per NACI July 2024 statement: "NACI strongly recommends RSV immunization for
+ * all adults 75 years of age and older AND for adults aged 65 to 74 years who
+ * are at increased risk of severe RSV disease."
+ */
+const RSV_NACI_VS_HC_65_74_INCREASED_RISK: NaciVsHcGap = {
   hcIndication: "Adults 60+ (single dose)",
-  naciGrade: "Grade B · Adults 60–74 (discretionary)",
+  naciGrade: "Grade A · Adults 65–74 at increased risk",
+  naciGradeLetter: "A",
+  alignment: "full",
+};
+
+/**
+ * NACI Grade B (discretionary) for adults 60–74 who are NOT at increased risk.
+ * Covers: all adults 60–64, and adults 65–74 without qualifying risk factors.
+ */
+const RSV_NACI_VS_HC_60_74_GENERAL: NaciVsHcGap = {
+  hcIndication: "Adults 60+ (single dose)",
+  naciGrade: "Grade B · Adults 60–74 without increased risk (discretionary)",
   naciGradeLetter: "B",
   alignment: "partial",
-  gapDetail: "Ages 60–74 are HC-approved but only NACI Grade B — not a strong-gap candidate under a NACI Grade A funding gate",
+  gapDetail: "Ages 60–74 without increased risk are HC-approved but only NACI Grade B — not a strong-gap candidate under a NACI Grade A funding gate",
 };
 
 const RSV_NACI_VS_HC_PREGNANT: NaciVsHcGap = {
@@ -49,6 +66,38 @@ const RSV_NACI_VS_HC_BEYFORTUS: NaciVsHcGap = {
 
 function has(c: ConditionId[], id: ConditionId) {
   return c.includes(id);
+}
+
+/** NACI-defined increased risk for severe RSV disease (adults 65–74). */
+function isIncreasedRiskForRsv(c: ConditionId[]): boolean {
+  return (
+    has(c, "lct_retirement_resident") ||
+    has(c, "alc_hospital") ||
+    has(c, "gn_immunocompromised") ||
+    has(c, "dialysis") ||
+    has(c, "transplant") ||
+    has(c, "homeless") ||
+    has(c, "indigenous") ||
+    has(c, "chronic_lung_prematurity")
+  );
+}
+
+/**
+ * Pick the correct NACI gap object for an adult RSV patient aged 60–74.
+ * - 65–74 with increased risk → Grade A
+ * - 60–64, or 65–74 without increased risk → Grade B
+ */
+function rsvNaciGap60to74(ageYears: number, conditionIds: ConditionId[]): NaciVsHcGap {
+  if (ageYears >= 65 && isIncreasedRiskForRsv(conditionIds)) {
+    return RSV_NACI_VS_HC_65_74_INCREASED_RISK;
+  }
+  return RSV_NACI_VS_HC_60_74_GENERAL;
+}
+
+/** Pick the correct gap for any adult: 75+ → Grade A, 60–74 → depends on risk. */
+function rsvNaciGapForAdult(ageYears: number, conditionIds: ConditionId[]): NaciVsHcGap {
+  if (ageYears >= 75) return RSV_NACI_VS_HC_75PLUS;
+  return rsvNaciGap60to74(ageYears, conditionIds);
 }
 
 function result(
@@ -276,7 +325,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.onPrograms,
         declineReason:
           "Previously received a publicly funded adult RSV dose — one-dose limit applies under the Ontario program",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (ageYears >= 75) {
@@ -296,6 +345,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
     }
     if (ageYears >= 60 && ageYears <= 74) {
       if (ontarioAdultRiskMet(conditionIds)) {
+        const gap = rsvNaciGap60to74(ageYears, conditionIds);
         return result({
           outcome: "covered",
           confidence: "high",
@@ -305,9 +355,10 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
           primarySourceUrl: SOURCES.onPrograms,
           supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
           dispensingContext: ON_PHARMACY_CONTEXT,
-          naciNote:
-            "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B). This patient also qualifies under Ontario's public program.",
-          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+          naciNote: ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk of severe RSV disease (Grade A)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B). This patient qualifies under Ontario's public program.",
+          naciVsHcGap: gap,
         });
       }
       return result({
@@ -322,12 +373,13 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.onPrograms,
         declineReason:
           "No qualifying high-risk criterion selected for the 60–74 age band",
-        naciNote:
-          "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
-        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 65
+          ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+          : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
         coverageGap:
           input.considerNaci === true
-            ? undefined  // NACI Grade B only for 60–74 — not a gap under Grade A gate
+            ? undefined
             : "Adults 60–74 are HC-approved for RSV but Ontario doesn't fund this group without high-risk criteria.",
       });
     }
@@ -342,7 +394,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
         "Outside eligible age range — Ontario's adult RSV public program covers ages 60–74 with high-risk criteria, or 75+",
       naciNote:
         "NACI guidance on RSV vaccination for adults under 60 without high-risk conditions is limited.",
-      naciVsHcGap: RSV_NACI_VS_HC_60_74,
+      naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
     });
   }
 
@@ -353,7 +405,7 @@ function evaluateOntario(input: CoverageInput): CoverageResult {
       "Unable to classify this Ontario RSV scenario with current inputs.",
     ],
     primarySourceUrl: SOURCES.onPrograms,
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -427,6 +479,7 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
     (has(conditionIds, "lct_retirement_resident") ||
       has(conditionIds, "alc_hospital"))
   ) {
+    const gap = rsvNaciGap60to74(ageYears, conditionIds);
     return result({
       outcome: "covered",
       confidence: "high",
@@ -434,9 +487,10 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
         "Nova Scotia funds adults 60+ in long-term care, nursing homes, RCF, or hospital inpatients 60+ awaiting placement (map your patient to those settings).",
       ],
       primarySourceUrl: SOURCES.nsAdultFaq,
-      naciNote:
-        "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B). This patient also meets Nova Scotia's care setting criterion.",
-      naciVsHcGap: RSV_NACI_VS_HC_60_74,
+      naciNote: ageYears >= 65
+        ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk of severe RSV disease (Grade A)."
+        : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B). This patient also meets Nova Scotia's care setting criterion.",
+      naciVsHcGap: gap,
     });
   }
 
@@ -452,12 +506,13 @@ function evaluateNovaScotia(input: CoverageInput): CoverageResult {
     primarySourceUrl: SOURCES.nsAdultFaq,
     declineReason:
       "Age or care setting criterion not met — Nova Scotia's public program requires 75+, or 60+ in LTC/nursing home/RCF/hospital awaiting placement",
-    naciNote:
-      "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), including those in community settings.",
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciNote: ageYears >= 65
+      ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+      : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
     coverageGap:
       input.considerNaci === true
-        ? undefined  // NACI Grade B only for community 60–74 — not a gap under Grade A gate
+        ? undefined
         : "Adults 60–74 in the community are HC-approved for RSV but Nova Scotia doesn't publicly fund this group.",
   });
 }
@@ -558,9 +613,12 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.qcPiq,
         supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
-        naciNote:
-          "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B) and strongly recommends for adults 75+ (Grade A).",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 75
+          ? "NACI strongly recommends RSV vaccination for adults 75+ (Grade A)."
+          : ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); discretionary for others in this age band (Grade B)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (
@@ -576,7 +634,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
         primarySourceUrl: SOURCES.qcPiq,
         naciNote:
           "NACI notes that adults with transplant history or dialysis may have heightened RSV risk.",
-        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
       });
     }
   }
@@ -589,7 +647,7 @@ function evaluateQuebec(input: CoverageInput): CoverageResult {
     ],
     primarySourceUrl: SOURCES.qcPiq,
     missingInformation: ["Review full Québec PIQ indication list for this patient"],
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -666,7 +724,7 @@ function evaluateAlberta(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.abRsv,
         declineReason: "Previously received a publicly funded adult RSV dose — one-dose limit applies",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (ageYears >= 70) {
@@ -678,12 +736,15 @@ function evaluateAlberta(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.abRsv,
         supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
-        naciNote: "NACI strongly recommends RSV vaccination for all adults 75+ (Grade A); discretionarily recommends for adults 60–74 (Grade B).",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 75
+          ? "NACI strongly recommends RSV vaccination for all adults 75+ (Grade A)."
+          : "NACI strongly recommends RSV vaccination for adults 70–74 at increased risk (Grade A); discretionary for those without increased risk (Grade B).",
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (ageYears >= 60) {
       if (has(conditionIds, "lct_retirement_resident") || has(conditionIds, "indigenous")) {
+        const gap = rsvNaciGap60to74(ageYears, conditionIds);
         return result({
           outcome: "covered",
           confidence: "high",
@@ -692,8 +753,10 @@ function evaluateAlberta(input: CoverageInput): CoverageResult {
           ],
           primarySourceUrl: SOURCES.abRsv,
           supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
-          naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
-          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+          naciNote: ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+          naciVsHcGap: gap,
         });
       }
       return result({
@@ -705,8 +768,10 @@ function evaluateAlberta(input: CoverageInput): CoverageResult {
         missingInformation: ["Confirm LTC/supportive living residency or Indigenous status for 60–69 eligibility"],
         primarySourceUrl: SOURCES.abRsv,
         declineReason: "Age 60–69 without qualifying criterion — Alberta requires 70+, LTC residency, or Indigenous status for this band",
-        naciNote: "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
-        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 65
+          ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+          : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
         coverageGap:
           input.considerNaci === true
             ? undefined
@@ -729,7 +794,7 @@ function evaluateAlberta(input: CoverageInput): CoverageResult {
     confidence: "low",
     rationale: ["Unable to classify this Alberta RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.abRsv,
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -806,7 +871,7 @@ function evaluateBC(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.bcRsv,
         declineReason: "Previously received a publicly funded adult RSV dose — one-dose limit applies",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (ageYears >= 75) {
@@ -824,6 +889,7 @@ function evaluateBC(input: CoverageInput): CoverageResult {
     }
     if (ageYears >= 60 && ageYears <= 74) {
       if (has(conditionIds, "lct_retirement_resident")) {
+        const gap = rsvNaciGap60to74(ageYears, conditionIds);
         return result({
           outcome: "covered",
           confidence: "high",
@@ -832,8 +898,10 @@ function evaluateBC(input: CoverageInput): CoverageResult {
           ],
           primarySourceUrl: SOURCES.bcRsv,
           supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
-          naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
-          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+          naciNote: ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+          naciVsHcGap: gap,
         });
       }
       return result({
@@ -844,8 +912,10 @@ function evaluateBC(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.bcRsv,
         missingInformation: ["Confirm current BC eligibility criteria for community-dwelling adults 60–74 at HealthLinkBC or with a health provider"],
-        naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
-        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 65
+          ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+          : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
       });
     }
     return result({
@@ -864,7 +934,7 @@ function evaluateBC(input: CoverageInput): CoverageResult {
     confidence: "low",
     rationale: ["Unable to classify this British Columbia RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.bcRsv,
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -926,10 +996,12 @@ function evaluateManitoba(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.mbRsv,
         declineReason: "Previously received a publicly funded adult RSV dose — one-dose limit applies",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (ageYears >= 60 && has(conditionIds, "lct_retirement_resident")) {
+      // PCH resident = increased risk → 65-74 gets Grade A
+      const gap = rsvNaciGapForAdult(ageYears, conditionIds);
       return result({
         outcome: "covered",
         confidence: "high",
@@ -938,8 +1010,12 @@ function evaluateManitoba(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.mbRsv,
         supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
-        naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 75
+          ? "NACI strongly recommends RSV vaccination for adults 75+ (Grade A)."
+          : ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: gap,
       });
     }
     return result({
@@ -954,8 +1030,12 @@ function evaluateManitoba(input: CoverageInput): CoverageResult {
       ],
       primarySourceUrl: SOURCES.mbRsv,
       declineReason: "Manitoba adult RSV public program is restricted to personal care home residents 60+ (no community-dwelling program encoded)",
-      naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
-      naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      naciNote: ageYears >= 75
+        ? "NACI strongly recommends RSV vaccination for adults 75+ (Grade A)."
+        : ageYears >= 65
+          ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+          : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+      naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
     });
   }
 
@@ -964,7 +1044,7 @@ function evaluateManitoba(input: CoverageInput): CoverageResult {
     confidence: "low",
     rationale: ["Unable to classify this Manitoba RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.mbRsv,
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -1026,7 +1106,7 @@ function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.nbRsv,
         declineReason: "Previously received a publicly funded adult RSV dose — NB program is not an annual vaccine",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
       });
     }
     if (ageYears >= 75) {
@@ -1044,6 +1124,7 @@ function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
     }
     if (ageYears >= 60) {
       if (has(conditionIds, "lct_retirement_resident") || has(conditionIds, "indigenous")) {
+        const gap = rsvNaciGap60to74(ageYears, conditionIds);
         return result({
           outcome: "covered",
           confidence: "high",
@@ -1052,8 +1133,10 @@ function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
           ],
           primarySourceUrl: SOURCES.nbRsv,
           supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy],
-          naciNote: "NACI discretionarily recommends RSV vaccination for adults 60–74 (Grade B).",
-          naciVsHcGap: RSV_NACI_VS_HC_60_74,
+          naciNote: ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+          naciVsHcGap: gap,
         });
       }
       return result({
@@ -1065,8 +1148,10 @@ function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
         missingInformation: ["Confirm LTC residency or Indigenous status for 60–74 eligibility"],
         primarySourceUrl: SOURCES.nbRsv,
         declineReason: "Age 60–74 without LTC or Indigenous pathway — NB program requires 75+, LTC, or Indigenous status for this band",
-        naciNote: "NACI discretionarily recommends RSV vaccination for all adults 60–74 (Grade B), regardless of risk group.",
-        naciVsHcGap: RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 65
+          ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+          : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
         coverageGap:
           input.considerNaci === true
             ? undefined
@@ -1089,7 +1174,7 @@ function evaluateNewBrunswick(input: CoverageInput): CoverageResult {
     confidence: "low",
     rationale: ["Unable to classify this New Brunswick RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.nbRsv,
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -1138,6 +1223,8 @@ function evaluateNL(input: CoverageInput): CoverageResult {
 
   if (product === "Arexvy" || product === "Abrysvo") {
     if (ageYears >= 60 && has(conditionIds, "lct_retirement_resident")) {
+      // Congregate living = increased risk → 65-74 gets Grade A
+      const gap = rsvNaciGapForAdult(ageYears, conditionIds);
       return result({
         outcome: "covered",
         confidence: "medium",
@@ -1146,8 +1233,12 @@ function evaluateNL(input: CoverageInput): CoverageResult {
         ],
         primarySourceUrl: SOURCES.nlRsv,
         supportingSourceUrls: [SOURCES.hcAbrysvo, SOURCES.hcArexvy, SOURCES.naciOlderAdults],
-        naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
-        naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+        naciNote: ageYears >= 75
+          ? "NACI strongly recommends RSV vaccination for adults 75+ (Grade A)."
+          : ageYears >= 65
+            ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A)."
+            : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+        naciVsHcGap: gap,
       });
     }
     return result({
@@ -1162,8 +1253,12 @@ function evaluateNL(input: CoverageInput): CoverageResult {
       ],
       primarySourceUrl: SOURCES.nlRsv,
       declineReason: "NL adult RSV program requires 60+ in congregate/LTC care — community-dwelling adults not covered",
-      naciNote: "NACI discretionarily recommends RSV for adults 60–74 (Grade B); strongly recommends for adults 75+ (Grade A).",
-      naciVsHcGap: ageYears >= 75 ? RSV_NACI_VS_HC_75PLUS : RSV_NACI_VS_HC_60_74,
+      naciNote: ageYears >= 75
+        ? "NACI strongly recommends RSV vaccination for adults 75+ (Grade A)."
+        : ageYears >= 65
+          ? "NACI strongly recommends RSV vaccination for adults 65–74 at increased risk (Grade A); without increased risk it is discretionary (Grade B)."
+          : "NACI discretionarily recommends RSV vaccination for adults 60–64 (Grade B).",
+      naciVsHcGap: rsvNaciGapForAdult(ageYears, conditionIds),
     });
   }
 
@@ -1172,7 +1267,7 @@ function evaluateNL(input: CoverageInput): CoverageResult {
     confidence: "low",
     rationale: ["Unable to classify this Newfoundland & Labrador RSV scenario with current inputs."],
     primarySourceUrl: SOURCES.nlRsv,
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 
@@ -1228,7 +1323,7 @@ function evaluatePEI(input: CoverageInput): CoverageResult {
     ],
     primarySourceUrl: SOURCES.peRsv,
     missingInformation: ["Confirm eligibility at Health PEI for the current RSV program"],
-    naciVsHcGap: RSV_NACI_VS_HC_60_74,
+    naciVsHcGap: RSV_NACI_VS_HC_60_74_GENERAL,
   });
 }
 

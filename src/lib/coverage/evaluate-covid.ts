@@ -1,5 +1,97 @@
-import type { CovidProduct, CoverageInput, CoverageResult, Jurisdiction } from "./types";
+import type { ConditionId, CovidProduct, CoverageInput, CoverageResult, Jurisdiction, NaciVsHcGap } from "./types";
 import { SOURCES } from "./sources";
+
+// ─── HC-vs-NACI gap objects (COVID-19) ──────────────────────────────────────
+// Source: NACI Guidance on the use of COVID-19 vaccines for 2025 to summer 2026
+// (January 10, 2025). Recommendations 1A (strong), 1B (discretionary), 2A/2B.
+
+/**
+ * NACI Recommendation 1A (Strong): COVID-19 vaccination for individuals at
+ * increased risk of severe disease or exposure. Includes: adults 65+, LTC/
+ * congregate residents, underlying medical conditions, pregnant, Indigenous,
+ * healthcare workers, racialized/equity-denied communities.
+ */
+const COVID_NACI_INCREASED_RISK: NaciVsHcGap = {
+  hcIndication: "All individuals 6 months+ (seasonal COVID-19 vaccination)",
+  naciGrade: "Grade A · Individuals at increased risk (Rec 1A, strong)",
+  naciGradeLetter: "A",
+  alignment: "full",
+};
+
+/**
+ * NACI Recommendation 1B (Discretionary): COVID-19 vaccination may be
+ * considered for all other individuals 6 months and older.
+ */
+const COVID_NACI_GENERAL_POP: NaciVsHcGap = {
+  hcIndication: "All individuals 6 months+ (seasonal COVID-19 vaccination)",
+  naciGrade: "Grade B · General population 6 months+ (Rec 1B, discretionary)",
+  naciGradeLetter: "B",
+  alignment: "full",
+};
+
+/**
+ * NACI Recommendation 2A (Strong): Moderately to severely immunocompromised
+ * individuals should receive a SECOND dose per year.
+ */
+const COVID_NACI_IMMUNOCOMPROMISED_2DOSE: NaciVsHcGap = {
+  hcIndication: "All individuals 6 months+ (seasonal COVID-19 vaccination)",
+  naciGrade: "Grade A · Immunocompromised: 2 doses/year (Rec 2A, strong)",
+  naciGradeLetter: "A",
+  alignment: "full",
+};
+
+/** Pick the appropriate NACI gap based on patient profile. */
+function covidNaciGap(input: CoverageInput): NaciVsHcGap {
+  const { ageYears, conditionIds, pregnant } = input;
+  // 2A: immunocompromised → strongest recommendation (2 doses/year)
+  if (isCovidHighRiskImmunocompromised(conditionIds)) {
+    return COVID_NACI_IMMUNOCOMPROMISED_2DOSE;
+  }
+  // 1A: increased risk groups
+  if (isCovidIncreasedRisk(ageYears, conditionIds, pregnant)) {
+    return COVID_NACI_INCREASED_RISK;
+  }
+  // 1B: general population
+  return COVID_NACI_GENERAL_POP;
+}
+
+function isCovidHighRiskImmunocompromised(c: ConditionId[]): boolean {
+  return (
+    c.includes("gn_immunocompromised") ||
+    c.includes("transplant") ||
+    c.includes("dialysis")
+  );
+}
+
+function isCovidIncreasedRisk(
+  ageYears: number,
+  c: ConditionId[],
+  pregnant?: boolean,
+): boolean {
+  return (
+    ageYears >= 65 ||
+    c.includes("lct_retirement_resident") ||
+    c.includes("alc_hospital") ||
+    c.includes("gn_immunocompromised") ||
+    c.includes("transplant") ||
+    c.includes("dialysis") ||
+    c.includes("chronic_lung_prematurity") ||
+    c.includes("indigenous") ||
+    c.includes("homeless") ||
+    pregnant === true
+  );
+}
+
+/** NACI note text varies by risk profile. */
+function covidNaciNote(input: CoverageInput): string {
+  if (isCovidHighRiskImmunocompromised(input.conditionIds)) {
+    return "NACI strongly recommends (Rec 2A) that moderately to severely immunocompromised individuals receive two COVID-19 vaccine doses per year.";
+  }
+  if (isCovidIncreasedRisk(input.ageYears, input.conditionIds, input.pregnant)) {
+    return "NACI strongly recommends (Rec 1A) COVID-19 vaccination for individuals at increased risk of severe disease — including adults 65+, LTC residents, those with underlying medical conditions, pregnant individuals, and Indigenous communities.";
+  }
+  return "NACI recommends (Rec 1B, discretionary) that all individuals 6 months and older may receive a seasonal COVID-19 vaccine dose.";
+}
 
 const COVID_MONOGRAPH: Record<CovidProduct, string> = {
   CovidSpikevax: SOURCES.hcCovidSpikevax,
@@ -110,6 +202,9 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
   const place = JURISDICTION_LABEL[j];
   const supporting = supportingRefs(product, j);
 
+  const gap = covidNaciGap(input);
+  const naciNote = covidNaciNote(input);
+
   if (infantMonthsMissing(input)) {
     return result({
       outcome: "conditional",
@@ -120,6 +215,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
       primarySourceUrl: provUrl,
       supportingSourceUrls: supporting,
       missingInformation: ["Enter age in months for infants under 1 year"],
+      naciVsHcGap: gap,
+      naciNote,
     });
   }
 
@@ -133,6 +230,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
       primarySourceUrl: provUrl,
       supportingSourceUrls: supporting,
       declineReason: `Under ${PUBLIC_PROGRAM_MIN_MONTHS} months — outside typical publicly funded seasonal COVID-19 program age`,
+      naciVsHcGap: gap,
+      naciNote,
     });
   }
 
@@ -149,6 +248,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
         supportingSourceUrls: [SOURCES.onCovid, ...supporting],
         declineReason:
           "Novavax Nuvaxovid is not supplied under Ontario's 2025/26 public COVID-19 program",
+        naciVsHcGap: gap,
+        naciNote,
       });
     }
 
@@ -166,6 +267,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
           "Confirm booking wave / seasonal dose timing at Ontario's COVID-19 vaccine information",
           "Confirm interval since last COVID-19 dose or infection if applicable",
         ],
+        naciVsHcGap: gap,
+        naciNote,
       });
     }
 
@@ -181,6 +284,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
       missingInformation: [
         "Verify product availability under Ontario's public COVID-19 program with pharmacy or public health",
       ],
+      naciVsHcGap: gap,
+      naciNote,
     });
   }
 
@@ -197,6 +302,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
       missingInformation: [
         `Confirm clinic access and formulations funded in ${place} for the current season`,
       ],
+      naciVsHcGap: gap,
+      naciNote,
     });
   }
 
@@ -213,6 +320,8 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
       missingInformation: [
         "Confirm seasonal eligibility (priority vs general population) and supply at the provincial source",
       ],
+      naciVsHcGap: gap,
+      naciNote,
     });
   }
 
@@ -228,5 +337,7 @@ export function evaluateCovid(input: CoverageInput): CoverageResult {
     missingInformation: [
       "Verify whether this product is publicly funded and available for the patient this season",
     ],
+    naciVsHcGap: gap,
+    naciNote,
   });
 }
